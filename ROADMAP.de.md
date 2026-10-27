@@ -75,7 +75,8 @@ Inzwischen getestet (Details in der [Testumgebung](docs/test-environment.de.md))
 
 - [x] Release-Builds für Linux x86_64 und arm64 (deb, rpm, AppImage); das AppImage prüft beim Start, ob `sshfs` da ist
 - [x] Screenshots und README auf Englisch und Deutsch
-- [ ] Kompletter Durchlauf auf einem echten Rechner mit systemd: einrichten → bei Anmeldung einbinden → Standby/Aufwachen → Netzwechsel → alles rückgängig (die Kette ohne systemd ist gegen die VM getestet, siehe [Testumgebung](docs/test-environment.de.md))
+- [x] Unter systemd gegen die VM: einbinden, Absturz von sshfs, NAS aus und wieder an, rückgängig (transiente Dienste, siehe [Testumgebung](docs/test-environment.de.md))
+- [ ] Standby/Aufwachen und ein echter Netzwechsel auf echter Hardware
 - [x] Release-Notes auf Englisch mit deutschem Abschnitt
 
 ## Später

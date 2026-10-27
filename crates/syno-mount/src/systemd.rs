@@ -48,7 +48,6 @@ pub fn mount_unit(mount: &Mount, program: &Path, command_line: &str) -> String {
          \n\
          [Service]\n\
          Type=simple\n\
-         ExecStartPre=/bin/mkdir -p {target}\n\
          ExecStart={program} run-mount {id}\n\
          ExecStopPost=-/usr/bin/fusermount3 -uz {target}\n\
          Restart=on-failure\n\

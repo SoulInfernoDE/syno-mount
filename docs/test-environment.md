@@ -42,3 +42,16 @@ Both run in temporary folders and remove the key from the NAS at the end. The `s
 | `chmod` in folder without ACL | works                                                                                  | works                                         |
 | Symlinks                      | created, not read back                                                                 | created, not read back                        |
 | xattr                         | not supported                                                                          | not supported                                 |
+
+## Under systemd, without changing the computer
+
+`… --example systemd prepare` with `HOME` and `XDG_*` pointing to a test folder writes the folder list, key and owner maps there. `systemd-run --user --unit=syno-mount-<id> --setenv=…` then runs `syno-mount run-mount <id>` and `syno-mount agent` as transient services, which are gone when stopped.
+
+| Test                | Result                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| Mount under systemd | mounted after 2 s                                                                                    |
+| `kill -9` of sshfs  | back after 6 s with one restart (after a fix: `run-mount` releases the dead mount first)             |
+| NAS switched off    | the agent noticed within 14 s, released the mount and restarted the service, which waits for the NAS |
+| NAS back            | mounted again 18 s after the VM started, without any action                                          |
+
+Not tested yet: suspend and resume of a real computer, and a real network change.

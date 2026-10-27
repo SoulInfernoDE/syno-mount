@@ -9,6 +9,9 @@
 //! APPIMAGE=$PWD/target/debug/syno-mount cargo run -p syno-mount --example systemd
 //! APPIMAGE=$PWD/target/debug/syno-mount cargo run -p syno-mount --example systemd remove
 //! ```
+//!
+//! `prepare` writes everything except the systemd units, for a test with a
+//! transient service (`systemd-run --user`) and `XDG_*` folders of its own.
 
 use std::time::{Duration, Instant};
 
@@ -95,6 +98,11 @@ async fn main() {
     MountStore::load(&paths.mounts())
         .upsert(mount.clone())
         .unwrap();
+    if std::env::args().nth(1).as_deref() == Some("prepare") {
+        manager::write_owner_maps(&paths, &mount).unwrap();
+        println!("{}", mount.id);
+        return;
+    }
     manager::apply(&paths, &mount).unwrap();
     manager::start(&mount).unwrap();
 

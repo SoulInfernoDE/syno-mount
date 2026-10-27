@@ -42,3 +42,16 @@ Beide laufen in temporären Ordnern und entfernen den Schlüssel am Ende vom NAS
 | `chmod` in Ordner ohne ACL  | geht                                                                                             | geht                                               |
 | Symlinks                    | angelegt, nicht zurückgelesen                                                                    | angelegt, nicht zurückgelesen                      |
 | xattr                       | nicht unterstützt                                                                                | nicht unterstützt                                  |
+
+## Unter systemd, ohne den Computer zu verändern
+
+`… --example systemd prepare` mit `HOME` und `XDG_*` in einem Testordner schreibt Ordnerliste, Schlüssel und Besitzer-Zuordnung dorthin. `systemd-run --user --unit=syno-mount-<id> --setenv=…` startet dann `syno-mount run-mount <id>` und `syno-mount agent` als transiente Dienste, die beim Stoppen verschwinden.
+
+| Test                    | Ergebnis                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| Einbinden unter systemd | nach 2 s eingebunden                                                                                   |
+| `kill -9` von sshfs     | nach 6 s mit einem Neustart zurück (nach einem Fix: `run-mount` löst den toten Mount zuerst)           |
+| NAS ausgeschaltet       | der Agent bemerkte es binnen 14 s, löste den Mount und startete den Dienst neu, der auf das NAS wartet |
+| NAS wieder da           | 18 s nach dem Start der VM wieder eingebunden, ohne Zutun                                              |
+
+Noch nicht getestet: Standby und Aufwachen eines echten Computers und ein echter Netzwechsel.

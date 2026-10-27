@@ -75,7 +75,8 @@ Tested since (details in [test environment](docs/test-environment.md)): DSM 7 pu
 
 - [x] Release builds for Linux x86_64 and arm64 (deb, rpm, AppImage); the AppImage checks for `sshfs` on start
 - [x] Screenshots and README in English and German
-- [ ] Full run on a real computer with systemd: set up → mount at login → suspend/resume → network change → undo everything (the chain without systemd is tested against the VM; see [test environment](docs/test-environment.md))
+- [x] Under systemd against the VM: mount, sshfs crash, NAS off and on again, undo (transient services; see [test environment](docs/test-environment.md))
+- [ ] Suspend/resume and a real network change on real hardware
 - [x] Release notes in English with a German section
 
 ## Later

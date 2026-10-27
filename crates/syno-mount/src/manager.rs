@@ -126,10 +126,7 @@ pub fn stop(mount: &Mount) -> io::Result<()> {
 /// key on the NAS is the caller's business (it needs a connection).
 pub fn remove(paths: &Paths, mount: &Mount, store_after: &MountStore) -> io::Result<()> {
     systemd::uninstall(paths, &mount.unit_name())?;
-    let _ = Command::new("fusermount3")
-        .args(["-uz"])
-        .arg(&mount.local_path)
-        .output();
+    release(&mount.local_path);
     bookmarks::remove(&paths.bookmarks(), &mount.local_path)?;
     for kind in ["uid", "gid"] {
         let _ = fs::remove_file(paths.owner_map(&mount.id, kind));
@@ -199,6 +196,11 @@ pub fn status(paths: &Paths, mount: &Mount) -> MountStatus {
     }
 }
 
+/// Unmounts lazily, also when the connection behind the mount is gone.
+fn release(path: &Path) {
+    let _ = Command::new("fusermount3").arg("-uz").arg(path).output();
+}
+
 /// What systemd runs: picks the address, notes it, and becomes sshfs.
 pub fn run_mount(paths: &Paths, id: &str) -> Result<(), String> {
     let store = MountStore::load(&paths.mounts());
@@ -216,7 +218,16 @@ pub fn run_mount(paths: &Paths, id: &str) -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_secs(3));
     };
-    fs::create_dir_all(&mount.local_path).map_err(|e| e.to_string())?;
+    // An sshfs that was killed can leave a dead mount behind ("transport endpoint
+    // is not connected"), on which even mkdir fails. Release it first.
+    if status::is_mounted(&mount.local_path) {
+        release(&mount.local_path);
+    }
+    if let Err(error) = fs::create_dir_all(&mount.local_path)
+        && error.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        return Err(error.to_string());
+    }
     let version = sshfs::installed_version().ok_or("sshfs is not installed")?;
     let arguments = sshfs::arguments(&mount, paths, &address, route, version)?;
     eprintln!("{}", sshfs::display(&arguments));
@@ -277,10 +288,7 @@ fn heal(paths: &Paths, mount: &Mount, event: bool) {
         false
     };
     if restart {
-        let _ = Command::new("fusermount3")
-            .arg("-uz")
-            .arg(&mount.local_path)
-            .output();
+        release(&mount.local_path);
         let _ = systemd::restart(&unit);
     }
 }
