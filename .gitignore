@@ -20,3 +20,4 @@ Thumbs.db
 
 # Local test credentials
 .env.vdsm
+/dist/
