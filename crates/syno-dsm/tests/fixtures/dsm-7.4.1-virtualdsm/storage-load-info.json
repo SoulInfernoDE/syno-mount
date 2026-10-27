@@ -1,0 +1,27 @@
+{
+  "disks": [],
+  "storagePools": [],
+  "volumes": [
+    {
+      "device_type": "basic",
+      "disks": [],
+      "drive_type": 1,
+      "fs_type": "btrfs",
+      "id": "volume_1",
+      "is_writable": true,
+      "num_id": 1,
+      "pool_path": "",
+      "raidType": "single",
+      "size": {
+        "free_inode": "0",
+        "total": "412310568960",
+        "total_device": "429490171904",
+        "total_inode": "0",
+        "used": "75468800"
+      },
+      "status": "normal",
+      "summary_status": "normal",
+      "vol_path": "/volume1"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+[package]
+name = "syno-mount"
+description = "Mounts Synology shared folders over SSHFS: setup, systemd user units, status, self-test"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+syno-dsm = { path = "../syno-dsm" }
+syno-ssh = { path = "../syno-ssh" }
+xattr = "1.6.1"
+tokio = { version = "1.54.1", features = ["rt", "time", "net", "macros", "process"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

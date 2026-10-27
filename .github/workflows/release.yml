@@ -1,0 +1,198 @@
+name: Release
+
+# A v* tag builds the packages for every platform and publishes them as a GitHub
+# release. A manual run builds everything and keeps the packages as workflow
+# artifacts, but publishes nothing.
+#
+#   validate  tag matches the versions in Cargo.toml and ui/package.json  -+
+#   packages  Linux x86_64 + arm64                                         -+-> publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate tag
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tag matches the versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          ui_version="$(node -p "require('./ui/package.json').version")"
+          for version in "$cargo_version" "$ui_version"; do
+            if [ "$tag_version" != "$version" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match Cargo.toml (${cargo_version}) and ui/package.json (${ui_version})" >&2
+              exit 1
+            fi
+          done
+
+  packages:
+    name: Packages (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 keeps the glibc floor low, so the packages run on Ubuntu 22.04,
+          # Linux Mint 21, Debian 12, Fedora 36 and newer.
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            bundles: deb,rpm,appimage
+          - name: linux-aarch64
+            os: ubuntu-22.04-arm
+            bundles: deb,rpm,appimage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev file
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.name }}
+      - name: Build packages
+        shell: bash
+        env:
+          BUNDLES: ${{ matrix.bundles }}
+          TARGET: ${{ matrix.target }}
+          # The AppImage tools run without FUSE on the runners.
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          set -euo pipefail
+          args=(--bundles "$BUNDLES")
+          if [ -n "$TARGET" ]; then args+=(--target "$TARGET"); fi
+          npm run app:build -- "${args[@]}"
+      - name: Collect packages
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          bundle_dir="target/release/bundle"
+          if [ -n "$TARGET" ]; then bundle_dir="target/${TARGET}/release/bundle"; fi
+          node tools/collect-bundles.mjs "$bundle_dir" dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [validate, packages]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: release-dist
+
+      - name: Check packages and write checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-dist
+          for pattern in '*_amd64.deb' '*_arm64.deb' '*.x86_64.rpm' '*.aarch64.rpm' \
+                         '*-x86_64.AppImage' '*-aarch64.AppImage'; do
+            if [ -z "$(find . -maxdepth 1 -type f -name "$pattern" -print -quit)" ]; then
+              echo "Missing release package matching ${pattern}" >&2
+              exit 1
+            fi
+          done
+          # Plain file names, so `sha256sum -c SHA256SUMS.txt` works next to the downloads.
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\n' \
+            | sort | xargs -d '\n' sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          {
+            echo "## Syno Mount ${TAG}"
+            echo
+            echo "| File | Size |"
+            echo "| --- | ---: |"
+            while IFS= read -r file; do
+              echo "| \`${file}\` | $(stat -c '%s' "$file") bytes |"
+            done < <(find . -maxdepth 1 -type f -printf '%f\n' | sort)
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Hand-written notes in docs/release-notes/<tag>.md win (English first, then
+      # a "Deutsch" section); otherwise a generic text in both languages is used.
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "docs/release-notes/${TAG}.md" ]; then
+            cp "docs/release-notes/${TAG}.md" release-notes.md
+            exit 0
+          fi
+          cat > release-notes.md <<EOF
+          Syno Mount ${TAG}: Synology shared folders on Linux over SSHFS.
+
+          ## Downloads
+
+          - \`.deb\` for Debian, Ubuntu and Linux Mint; \`.rpm\` for Fedora and openSUSE; \`.AppImage\` runs without installing (needs \`sshfs\` from the distribution). Each for x86_64 and arm64 (aarch64). Built on Ubuntu 22.04, so glibc 2.35 or newer is needed.
+
+          ## Verification
+
+          \`\`\`sh
+          sha256sum -c SHA256SUMS.txt
+          \`\`\`
+
+          ## Deutsch
+
+          Syno Mount ${TAG}: Synology-Freigaben unter Linux per SSHFS.
+
+          - \`.deb\` für Debian, Ubuntu und Linux Mint; \`.rpm\` für Fedora und openSUSE; \`.AppImage\` läuft ohne Installation (braucht \`sshfs\` aus der Distribution). Jeweils für x86_64 und arm64 (aarch64). Gebaut auf Ubuntu 22.04, daher wird glibc 2.35 oder neuer gebraucht.
+
+          Prüfen mit \`sha256sum -c SHA256SUMS.txt\`.
+          EOF
+
+      - name: Publish GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          prerelease_args=()
+          # Versions before 1.0 and alpha/beta/rc tags are marked as pre-releases.
+          if [[ "$TAG" =~ ^v0\. || "$TAG" =~ (alpha|beta|rc) ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+          mapfile -t assets < <(find release-dist -maxdepth 1 -type f | sort)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Syno Mount ${TAG}" --notes-file release-notes.md "${prerelease_args[@]}"
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" \
+              --title "Syno Mount ${TAG}" \
+              --notes-file release-notes.md \
+              "${prerelease_args[@]}"
+          fi

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=NAS Mounts
+GenericName[de]=NAS-Freigaben
+Comment={{comment}}
+Comment[de]=Synology-Freigaben per SSHFS einbinden
+Exec={{exec}}
+Icon={{icon}}
+Terminal=false
+Categories={{categories}}
+Keywords=Synology;NAS;DSM;SSHFS;SFTP;Mount;Network;
+Keywords[de]=Synology;NAS;DSM;SSHFS;SFTP;Einbinden;Netzlaufwerk;
+StartupWMClass=syno-mount

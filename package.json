@@ -1,0 +1,27 @@
+{
+  "name": "syno-mount-workspace",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "workspaces": [
+    "ui"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run dev -w ui",
+    "build": "npm run build -w ui",
+    "check": "npm run check -w ui",
+    "app:dev": "cd crates/syno-mount-app && tauri dev",
+    "app:build": "cd crates/syno-mount-app && tauri build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "licenses": "node tools/check-npm-licenses.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.2",
+    "prettier": "3.9.10",
+    "prettier-plugin-svelte": "4.1.1"
+  }
+}

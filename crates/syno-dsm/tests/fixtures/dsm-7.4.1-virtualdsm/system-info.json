@@ -1,0 +1,11 @@
+{
+  "enabled_ntp": true,
+  "firmware_ver": "DSM 7.4.1-90080",
+  "model": "VirtualDSM",
+  "ram_size": 12288,
+  "rp1": 1,
+  "rp2": 1,
+  "support_esata": "no",
+  "support_rp": true,
+  "up_time": "0:5:39"
+}

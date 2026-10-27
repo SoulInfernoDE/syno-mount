@@ -1,0 +1,38 @@
+[package]
+name = "syno-mount-app"
+description = "Syno Mount: Synology shared folders on Linux over SSHFS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+default-run = "syno-mount"
+
+[[bin]]
+name = "syno-mount"
+path = "src/main.rs"
+
+[features]
+# Enabled by `tauri build`: serve the bundled UI instead of the Vite dev server.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+syno-discovery = { path = "../syno-discovery" }
+syno-dsm = { path = "../syno-dsm" }
+syno-mount = { path = "../syno-mount" }
+syno-ssh = { path = "../syno-ssh" }
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

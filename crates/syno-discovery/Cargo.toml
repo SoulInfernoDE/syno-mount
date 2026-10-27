@@ -1,0 +1,18 @@
+[package]
+name = "syno-discovery"
+description = "Finds Synology NAS on the local network through mDNS/Bonjour"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+mdns-sd = "0.21"
+socket2 = { version = "0.6", features = ["all"] }
+serde.workspace = true
+
+[lints]
+workspace = true
