@@ -16,7 +16,7 @@ mod state;
 
 use std::process::ExitCode;
 
-use syno_mount::{Paths, manager};
+use syno_mount::{MountStore, Paths, manager};
 use tauri::Manager;
 
 fn headless(arguments: &[String]) -> Option<ExitCode> {
@@ -30,6 +30,40 @@ fn headless(arguments: &[String]) -> Option<ExitCode> {
             }
         },
         [command] if command == "agent" => manager::agent(&paths),
+        // For scripts and support: the state of every folder, and a folder's self-test.
+        [command] if command == "status" => {
+            let store = MountStore::load(&paths.mounts());
+            let statuses: Vec<_> = store
+                .all()
+                .iter()
+                .map(|mount| manager::status(&paths, mount))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&statuses).unwrap_or_default()
+            );
+            Some(ExitCode::SUCCESS)
+        }
+        [command, id] if command == "selftest" => {
+            let store = MountStore::load(&paths.mounts());
+            let Some(mount) = store.get(id) else {
+                eprintln!("no folder with the ID {id}");
+                return Some(ExitCode::FAILURE);
+            };
+            match syno_mount::selftest::run(&mount.local_path) {
+                Ok(checks) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&checks).unwrap_or_default()
+                    );
+                    Some(ExitCode::SUCCESS)
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    Some(ExitCode::FAILURE)
+                }
+            }
+        }
         [flag] if flag == "--version" => {
             println!("syno-mount {}", env!("CARGO_PKG_VERSION"));
             Some(ExitCode::SUCCESS)
