@@ -209,9 +209,11 @@ pub fn status(paths: &Paths, mount: &Mount) -> MountStatus {
     let wanted = wanted(paths, mount);
     let mounted = status::is_mounted(&mount.local_path);
     let log = last_lines(&log_file(paths, &mount.id), 6);
-    let failed = log
-        .as_deref()
-        .is_some_and(|log| log.contains("ERROR") || log.contains("Fatal"));
+    let failed = log.as_deref().is_some_and(|log| {
+        ["ERROR", "CRITICAL", "Fatal"]
+            .iter()
+            .any(|word| log.contains(word))
+    });
     let state = match (mounted, wanted) {
         (true, _) if status::answers(&mount.local_path, Duration::from_secs(3)) => State::Mounted,
         (true, _) => State::Stale,

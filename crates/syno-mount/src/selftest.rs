@@ -2,7 +2,9 @@
 //! learns before starting a program whether it will find what it needs.
 
 use std::fs::{self, File, FileTimes, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
+#[cfg(unix)]
+use std::io::{Seek, SeekFrom};
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};

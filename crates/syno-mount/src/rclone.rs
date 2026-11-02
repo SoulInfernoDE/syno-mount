@@ -55,6 +55,9 @@ pub fn remote(mount: &Mount, paths: &Paths, address: &Address) -> String {
             "known_hosts_file",
             paths.known_hosts().to_string_lossy().into_owned(),
         ),
+        // Only the pinned key type: DSM offers several, and rclone reports any other
+        // one as a key mismatch.
+        ("host_key_algorithms", mount.host_key_algorithm.clone()),
         ("ciphers", ciphers(mount.tuning.cpu).to_owned()),
         // DSM's SFTP has no shell, so rclone must not try to run md5sum and the like.
         ("disable_hashcheck", "true".to_owned()),
@@ -153,6 +156,7 @@ mod tests {
         assert_eq!(arguments[0], "mount");
         assert!(arguments[1].starts_with(":sftp,host=192.168.1.20,port=22,user=anna,key_file="));
         assert!(arguments[1].contains(",known_hosts_file="));
+        assert!(arguments[1].contains(",host_key_algorithms=ssh-ed25519,"));
         assert!(arguments[1].contains(",shell_type=none,"));
         assert!(arguments[1].ends_with(":/Media"));
         assert_eq!(arguments[2], "Z:");
