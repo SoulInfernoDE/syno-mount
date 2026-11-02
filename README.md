@@ -24,9 +24,9 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
 - **Signs in to DSM once** (with two-step verification) to check that **SFTP** and the **user home service** are on, and switches them on after asking. Accounts that may not use DSM go by SFTP alone.
 - **Trusts the NAS deliberately:** shows the SHA-256 fingerprint of its SSH host key and pins it in the app's own `known_hosts`. A changed key stops every mount.
 - **Creates an ed25519 key** for this computer and installs it on the NAS over SFTP, with the permissions sshd insists on. No password is stored, neither DSM's nor the SSH one.
-- **Mounts each folder** with one systemd user service: at login if you like, `reconnect`, keep-alives, the fastest cipher for the NAS's processor, parallel connections. Own files show as yours (owner mapping).
+- **Mounts each folder** at login if you like, with keep-alives, the fastest cipher for the NAS's processor and parallel connections. On **Linux** as a folder through `sshfs`, one systemd user service each, and your own files show as yours (owner mapping). On **Windows** as a network drive or folder through `rclone`.
 - **Keeps folders mounted:** a small agent notices suspend and network changes, releases hanging mounts and mounts again, and switches between the LAN and the internet address.
-- **Self-test and speed test** per folder, a status page with route and latency, the exact `sshfs` command to read, and **undo** of everything, including the key on the NAS.
+- **Self-test and speed test** per folder, a status page with route and latency, the exact `sshfs` or `rclone` command to read, and **undo** of everything, including the key on the NAS.
 - **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. Nothing changes in DSM before you confirm the list of changes.
 
 <p align="center">
@@ -37,13 +37,17 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
   <img src="docs/images/selftest.en.png" alt="Self-test of a folder: permissions, owner, times, renaming and hard links work; symbolic links and locks are limited; extended attributes do not work" width="760">
 </p>
 
-## What SSHFS can and cannot do
+## What a mount can and cannot do
 
-SSHFS passes on more than SMB or WebDAV, but it is still a network file system. The self-test tries each point for real.
+Both ways pass on more than SMB or WebDAV, but they are still network file systems. The self-test tries each point for real.
+
+**Linux (SSHFS):**
 
 | Works                                                                                                                  | Limited                                                                                                | Does not work               |
 | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------- |
 | Unix permissions (in folders without ACL, see below), owner, times, renaming over files, hard links, files beyond 4 GB | Symbolic links (created, but DSM's SFTP server does not read them back), locks (only on this computer) | Extended attributes (xattr) |
+
+**Windows (rclone):** reading, writing, times and renaming work; locks hold only on this computer. Windows has no Unix permissions or owner mapping over SFTP, and links are not supported.
 
 For games, Steam libraries and Wine prefixes that need a real disk, an **iSCSI** backend is planned; see the [roadmap](ROADMAP.md).
 
@@ -59,45 +63,51 @@ Afterwards the folder belongs to its owner with the mode it has; set it with `ch
 
 ## Windows
 
-On Windows each folder becomes a **network drive** (from `Z:` down) or a folder. [rclone](https://rclone.org) speaks SFTP and [WinFsp](https://winfsp.dev) provides the drive; both are free software and install with winget:
+On Windows each folder becomes a **network drive** (from `Z:` down) or a folder. [rclone](https://rclone.org) speaks SFTP and [WinFsp](https://winfsp.dev) provides the drive; both are free software (see [Install](#install)).
+
+The assistant, the key, the pinned host key and the administrator area work as on Linux. A small agent (`syno-mount.exe agent`, started at sign-in through the user's `Run` key) starts one rclone per folder, restarts it when it ends or hangs, and moves between the LAN and the internet address.
+
+Why not SSHFS-Win: its last release is from 2021, while rclone and WinFsp are maintained.
+
+## Install
+
+Downloads for both systems are on the [releases](https://github.com/SoulInfernoDE/syno-mount/releases) page; check them with `sha256sum -c SHA256SUMS.txt`.
+
+### Linux
+
+Install the package for your system: `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) or `.AppImage`, each for x86_64 and arm64. Syno Mount needs `sshfs` (3.x, best 3.7 or newer) and FUSE 3 from the distribution. The packages pull them in; for the AppImage install them yourself:
+
+```bash
+sudo apt install sshfs
+```
+
+### Windows
+
+Windows 10 or 11 on x64 (tested on Windows 11). First install WinFsp and rclone:
 
 ```powershell
 winget install -e --id WinFsp.WinFsp
 winget install -e --id Rclone.Rclone
 ```
 
-The assistant, the key, the pinned host key and the administrator area work as on Linux. A small agent (`syno-mount.exe agent`, started at sign-in through the user's `Run` key) starts one rclone per folder, restarts it when it ends or hangs, and moves between the LAN and the internet address. Windows has no Unix permissions or owner mapping, so the self-test checks reading, writing, times, renaming and locks.
-
-Why not SSHFS-Win: its last release is from 2021, while rclone and WinFsp are maintained.
-
-## Install
-
-On Linux, Syno Mount needs `sshfs` (3.x, best 3.7 or newer) and FUSE 3 from the distribution. The packages pull them in; for the AppImage install them yourself:
-
-```bash
-sudo apt install sshfs
-```
-
-Then install the package for your system from the [releases](https://github.com/SoulInfernoDE/syno-mount/releases): `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) or `.AppImage`, each for x86_64 and arm64. On Windows: `-setup.exe` (per user) or `.msi`, after WinFsp and rclone (see above).
+Then run `syno-mount-<version>-windows-x64-setup.exe` (installs for your account, no administrator rights) or the `.msi`. The installers are not signed yet, so SmartScreen may warn: "More info", then "Run anyway". The **System** page of the app shows whether rclone and WinFsp were found.
 
 ## How it works
 
-| What                                   | Where                                         |
-| -------------------------------------- | --------------------------------------------- |
-| Keys, `known_hosts`, owner maps        | `~/.local/share/syno-mount`                   |
-| List of folders and NAS                | `~/.config/syno-mount`                        |
-| One service per folder, plus the agent | `~/.config/systemd/user/syno-mount-*.service` |
-| Which address a folder uses            | `~/.local/state/syno-mount`                   |
+| What                            | Linux                                         | Windows                                        |
+| ------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Keys, `known_hosts`, owner maps | `~/.local/share/syno-mount`                   | `%LOCALAPPDATA%\syno-mount`                    |
+| List of folders and NAS         | `~/.config/syno-mount`                        | `%APPDATA%\syno-mount`                         |
+| Mounting and the agent          | `~/.config/systemd/user/syno-mount-*.service` | `syno-mount.exe agent` from the `Run` key      |
+| Which address a folder uses     | `~/.local/state/syno-mount`                   | `%LOCALAPPDATA%\syno-mount` (with rclone logs) |
 
-On Windows the files live in `%APPDATA%\syno-mount` (list) and `%LOCALAPPDATA%\syno-mount` (keys, `known_hosts`, state and rclone logs).
-
-Your own `~/.ssh` stays untouched. Each service runs `syno-mount run-mount <id>`, which picks the LAN or internet address and then runs `sshfs`; the app shows the full command. More in [docs/architecture.md](docs/architecture.md).
+Your own `~/.ssh` stays untouched. On Linux each service runs `syno-mount run-mount <id>`, which picks the LAN or internet address and then runs `sshfs`; on Windows the agent does the same with `rclone mount`. The app shows the full command. More in [docs/architecture.md](docs/architecture.md).
 
 **Over the internet** the NAS needs a forwarded SSH port (better not 22) or a VPN. QuickConnect does not carry SSH. Enter the DDNS name and port as the internet address of a folder.
 
 ## Build
 
-Requirements: Rust 1.99+, Node.js 24+, `sshfs`, and the [Tauri 2 system dependencies](https://tauri.app/start/prerequisites/).
+Requirements: Rust 1.99+, Node.js 24+ and the [Tauri 2 system dependencies](https://tauri.app/start/prerequisites/); to run it, `sshfs` on Linux, WinFsp and rclone on Windows. Windows packages are built on Windows (the CI does it); cross-compiling from Linux does not work.
 
 ```bash
 npm ci
