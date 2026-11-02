@@ -2,6 +2,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import './styles/skins.css';
 import './styles/base.css';
+import './styles/platform.css';
 
 // The browser preview can stand in for the Rust core: `npm run dev`, then open `/?mock`.
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('mock')) {

@@ -117,11 +117,6 @@
     opacity: var(--nav-indicator);
   }
 
-  :global([data-skin='macos']) .nav-item[aria-current='page'] {
-    background: var(--accent);
-    color: var(--accent-text);
-  }
-
   .label {
     flex: 1;
     overflow: hidden;
