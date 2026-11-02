@@ -5,7 +5,7 @@ name: Release
 # artifacts, but publishes nothing.
 #
 #   validate  tag matches the versions in Cargo.toml and ui/package.json  -+
-#   packages  Linux x86_64 + arm64                                         -+-> publish
+#   packages  Linux x86_64 + arm64, Windows x64                            -+-> publish
 
 on:
   push:
@@ -58,10 +58,14 @@ jobs:
           - name: linux-aarch64
             os: ubuntu-22.04-arm
             bundles: deb,rpm,appimage
+          - name: windows-x64
+            os: windows-latest
+            bundles: msi,nsis
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev file
@@ -125,7 +129,7 @@ jobs:
           set -euo pipefail
           cd release-dist
           for pattern in '*_amd64.deb' '*_arm64.deb' '*.x86_64.rpm' '*.aarch64.rpm' \
-                         '*-x86_64.AppImage' '*-aarch64.AppImage'; do
+                         '*-x86_64.AppImage' '*-aarch64.AppImage' '*.msi' '*-setup.exe'; do
             if [ -z "$(find . -maxdepth 1 -type f -name "$pattern" -print -quit)" ]; then
               echo "Missing release package matching ${pattern}" >&2
               exit 1
@@ -156,11 +160,12 @@ jobs:
             exit 0
           fi
           cat > release-notes.md <<EOF
-          Syno Mount ${TAG}: Synology shared folders on Linux over SSHFS.
+          Syno Mount ${TAG}: Synology shared folders over SFTP on Linux and Windows.
 
           ## Downloads
 
-          - \`.deb\` for Debian, Ubuntu and Linux Mint; \`.rpm\` for Fedora and openSUSE; \`.AppImage\` runs without installing (needs \`sshfs\` from the distribution). Each for x86_64 and arm64 (aarch64). Built on Ubuntu 22.04, so glibc 2.35 or newer is needed.
+          - **Linux:** \`.deb\` for Debian, Ubuntu and Linux Mint; \`.rpm\` for Fedora and openSUSE; \`.AppImage\` runs without installing (needs \`sshfs\` from the distribution). Each for x86_64 and arm64 (aarch64). Built on Ubuntu 22.04, so glibc 2.35 or newer is needed.
+          - **Windows:** \`-setup.exe\` (per user) or \`.msi\`. Needs WinFsp and rclone: \`winget install -e --id WinFsp.WinFsp\` and \`winget install -e --id Rclone.Rclone\`. The installers are not signed yet, so SmartScreen may warn.
 
           ## Verification
 
@@ -170,9 +175,10 @@ jobs:
 
           ## Deutsch
 
-          Syno Mount ${TAG}: Synology-Freigaben unter Linux per SSHFS.
+          Syno Mount ${TAG}: Synology-Freigaben per SFTP unter Linux und Windows.
 
-          - \`.deb\` für Debian, Ubuntu und Linux Mint; \`.rpm\` für Fedora und openSUSE; \`.AppImage\` läuft ohne Installation (braucht \`sshfs\` aus der Distribution). Jeweils für x86_64 und arm64 (aarch64). Gebaut auf Ubuntu 22.04, daher wird glibc 2.35 oder neuer gebraucht.
+          - **Linux:** \`.deb\` für Debian, Ubuntu und Linux Mint; \`.rpm\` für Fedora und openSUSE; \`.AppImage\` läuft ohne Installation (braucht \`sshfs\` aus der Distribution). Jeweils für x86_64 und arm64 (aarch64). Gebaut auf Ubuntu 22.04, daher wird glibc 2.35 oder neuer gebraucht.
+          - **Windows:** \`-setup.exe\` (pro Benutzer) oder \`.msi\`. Braucht WinFsp und rclone: \`winget install -e --id WinFsp.WinFsp\` und \`winget install -e --id Rclone.Rclone\`. Die Installer sind noch nicht signiert, SmartScreen kann deshalb warnen.
 
           Prüfen mit \`sha256sum -c SHA256SUMS.txt\`.
           EOF

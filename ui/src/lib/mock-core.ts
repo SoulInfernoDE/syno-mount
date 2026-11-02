@@ -5,6 +5,9 @@
 // `&shot=selftest` opens a self-test and `&shot=add` the assistant.
 
 import type {
+  Account,
+  AdminChanges,
+  AdminShare,
   Check,
   ConnectOutcome,
   ConnectRequest,
@@ -17,6 +20,7 @@ import type {
   MountSettings,
   MountView,
   ServicesView,
+  ShareAccess,
   Speed,
   SystemCheck,
 } from './backend';
@@ -209,11 +213,14 @@ const speed: Speed = {
 };
 
 const system: SystemCheck = {
+  platform: 'linux',
   sshfs: '3.7.3',
   sshfsParallel: true,
   fusermount: true,
   fuseDevice: true,
   systemdUser: true,
+  rclone: null,
+  winfsp: false,
   installHint: null,
 };
 
@@ -221,6 +228,86 @@ function find(id: unknown): MountView {
   const view = views.find((entry) => entry.mount.id === id);
   if (!view) throw { key: 'not-found' };
   return view;
+}
+
+// Administrator area.
+let adminAccounts: Account[] = [
+  {
+    name: 'anna',
+    description: '',
+    admin: true,
+    disabled: false,
+    sftp: 'allowed',
+    sftpRule: 'default',
+  },
+  {
+    name: 'ben',
+    description: 'Kids',
+    admin: false,
+    disabled: false,
+    sftp: 'denied',
+    sftpRule: { own: 'denied' },
+  },
+  {
+    name: 'carla',
+    description: 'Office',
+    admin: false,
+    disabled: false,
+    sftp: 'allowed',
+    sftpRule: 'default',
+  },
+  {
+    name: 'guest-tv',
+    description: 'Media player',
+    admin: false,
+    disabled: true,
+    sftp: 'allowed',
+    sftpRule: 'default',
+  },
+];
+const adminShares: AdminShare[] = [
+  { name: 'Games', volume: '/volume1', acl: true },
+  { name: 'Media', volume: '/volume1', acl: true },
+  { name: 'Projects', volume: '/volume2', acl: false },
+];
+const adminAccess: Record<string, ShareAccess[]> = {
+  Games: [
+    { account: 'anna', permission: 'none', admin: true },
+    { account: 'ben', permission: 'readOnly', admin: false },
+    { account: 'carla', permission: 'none', admin: false },
+    { account: 'guest-tv', permission: 'deny', admin: false },
+  ],
+  Media: [
+    { account: 'anna', permission: 'none', admin: true },
+    { account: 'ben', permission: 'readOnly', admin: false },
+    { account: 'carla', permission: 'readWrite', admin: false },
+    { account: 'guest-tv', permission: 'readOnly', admin: false },
+  ],
+  Projects: [
+    { account: 'anna', permission: 'none', admin: true },
+    { account: 'ben', permission: 'deny', admin: false },
+    { account: 'carla', permission: 'custom', admin: false },
+    { account: 'guest-tv', permission: 'deny', admin: false },
+  ],
+};
+let adminDevice: KnownDevice | null = null;
+
+function applyAdmin(changes: AdminChanges) {
+  for (const change of changes.sftp) {
+    adminAccounts = adminAccounts.map((account) =>
+      account.name === change.account
+        ? {
+            ...account,
+            sftp: change.access ?? 'allowed',
+            sftpRule: change.access ? { own: change.access } : 'default',
+          }
+        : account,
+    );
+  }
+  for (const change of changes.shares) {
+    const entry = adminAccess[change.share]?.find((item) => item.account === change.account);
+    if (entry) entry.permission = change.permission;
+  }
 }
 
 const commands: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {
@@ -285,6 +372,33 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
   remove_mount: async (args) => {
     views = views.filter((view) => view.mount.id !== args.id);
   },
+  admin_connect: async (args) => {
+    const outcome = await connect(args.request as ConnectRequest);
+    if (outcome.status === 'connected') {
+      adminDevice = outcome.device;
+      pending = null;
+    }
+    return outcome;
+  },
+  admin_overview: async () => {
+    if (!adminDevice) throw { key: 'not-connected' };
+    await wait(300);
+    return {
+      device: adminDevice,
+      services: { sftp: true, sftpPort: 22, home: true },
+      accounts: structuredClone(adminAccounts),
+      shares: adminShares,
+    };
+  },
+  admin_share_access: async (args) => structuredClone(adminAccess[args.share as string] ?? []),
+  admin_apply: async (args) => {
+    await wait(600);
+    applyAdmin(args.changes as AdminChanges);
+  },
+  admin_enable_services: async () => ({ sftp: true, sftpPort: 22, home: true }),
+  admin_disconnect: async () => {
+    adminDevice = null;
+  },
   self_test: async () => (await wait(1200), checks),
   speed_test: async () => (await wait(1500), speed),
   open_folder: async () => undefined,
@@ -312,5 +426,31 @@ if (shot) {
       buttons.filter((button) => !button.disabled)[5]?.click();
     }
     if (shot === 'add') click('.nav-item', 1);
+    if (shot === 'admin') {
+      // Pick the first NAS, sign in with the sample password, trust the certificate.
+      trusted = true;
+      click('.nav-item', 2);
+      setTimeout(() => {
+        click('.list .button', 0);
+        setTimeout(() => {
+          const fields = document.querySelectorAll<HTMLInputElement>('form input');
+          const fill = (input: HTMLInputElement | undefined, value: string) => {
+            if (!input) return;
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          };
+          fill(fields[0], 'anna');
+          fill(fields[1], 'demo');
+          document.querySelector<HTMLFormElement>('form')?.requestSubmit();
+          setTimeout(() => {
+            const select = document.querySelectorAll<HTMLSelectElement>('.row .select')[2];
+            if (select) {
+              select.value = 'allowed';
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, 1500);
+        }, 1500);
+      }, 1500);
+    }
   }, 600);
 }

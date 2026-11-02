@@ -3,6 +3,10 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+/** Windows mounts with rclone and drive letters; Linux with sshfs and folders. */
+export const isWindows = () =>
+  /win/i.test(navigator.userAgent) && !/linux/i.test(navigator.userAgent);
+
 /** True inside the app (or with the mock); false in the plain browser preview. */
 export const hasCore = () => '__TAURI_INTERNALS__' in window;
 
@@ -91,11 +95,14 @@ export interface MountView {
 }
 
 export interface SystemCheck {
+  platform: 'linux' | 'windows';
   sshfs: string | null;
   sshfsParallel: boolean;
   fusermount: boolean;
   fuseDevice: boolean;
   systemdUser: boolean;
+  rclone: string | null;
+  winfsp: boolean;
   installHint: string | null;
 }
 
@@ -244,3 +251,51 @@ export function parseAddress(
   if (!text || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   return { host: text, port };
 }
+
+// Administrator area.
+
+export type Access = 'allowed' | 'denied';
+export type SftpRule = 'default' | { own: Access };
+export type Permission = 'none' | 'deny' | 'readOnly' | 'readWrite' | 'custom';
+
+export interface Account {
+  name: string;
+  description: string;
+  admin: boolean;
+  disabled: boolean;
+  sftp: Access;
+  sftpRule: SftpRule;
+}
+
+export interface AdminShare {
+  name: string;
+  volume: string;
+  acl: boolean;
+}
+
+export interface ShareAccess {
+  account: string;
+  permission: Permission;
+  admin: boolean;
+}
+
+export interface AdminOverview {
+  device: KnownDevice;
+  services: Services;
+  accounts: Account[];
+  shares: AdminShare[];
+}
+
+export interface AdminChanges {
+  sftp: { account: string; access: Access | null }[];
+  shares: { share: string; account: string; permission: Permission }[];
+}
+
+export const adminConnect = (request: ConnectRequest) =>
+  invoke<ConnectOutcome>('admin_connect', { request });
+export const adminOverview = () => invoke<AdminOverview>('admin_overview');
+export const adminShareAccess = (share: string) =>
+  invoke<ShareAccess[]>('admin_share_access', { share });
+export const adminApply = (changes: AdminChanges) => invoke<void>('admin_apply', { changes });
+export const adminEnableServices = () => invoke<Services>('admin_enable_services');
+export const adminDisconnect = () => invoke<void>('admin_disconnect');

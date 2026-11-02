@@ -12,11 +12,14 @@ use crate::paths::Paths;
 
 /// This computer's name, so the user can tell keys apart in `authorized_keys`.
 fn hostname() -> String {
-    fs::read_to_string("/proc/sys/kernel/hostname")
-        .map(|name| name.trim().to_owned())
-        .ok()
+    let name = if cfg!(windows) {
+        std::env::var("COMPUTERNAME").ok()
+    } else {
+        fs::read_to_string("/proc/sys/kernel/hostname").ok()
+    };
+    name.map(|name| name.trim().to_owned())
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| "linux".into())
+        .unwrap_or_else(|| "computer".into())
 }
 
 /// "syno-mount:anna@laptop": the comment that marks the app's key on the NAS.
@@ -102,7 +105,16 @@ pub struct NasLink {
     pub cpu: CpuKind,
 }
 
-/// `~/NAS/<NAS name>/<share>`.
+/// Drive letters that are free now, from Z: down to D:.
+pub fn free_drive_letters() -> Vec<PathBuf> {
+    ('D'..='Z')
+        .rev()
+        .map(|letter| PathBuf::from(format!("{letter}:\\")))
+        .filter(|drive| !drive.exists())
+        .collect()
+}
+
+/// `~/NAS/<NAS name>/<share>`; on Windows a drive letter is chosen instead.
 pub fn default_folder(paths: &Paths, nas_name: &str, share: &str) -> PathBuf {
     let clean = |text: &str| text.replace(['/', ','], "-");
     paths

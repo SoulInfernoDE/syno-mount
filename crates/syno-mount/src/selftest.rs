@@ -3,6 +3,7 @@
 
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -54,6 +55,7 @@ impl Drop for Scratch {
     }
 }
 
+#[cfg(unix)]
 /// The user ID of this process, from `/proc` (no libc needed).
 fn own_uid() -> Option<u32> {
     let status = fs::read_to_string("/proc/self/status").ok()?;
@@ -81,23 +83,8 @@ pub fn run(root: &Path) -> Result<Vec<Check>, String> {
         Err(e) => return Err(error("write a file", e)),
     });
 
-    // Unix permissions: DSM ignores them in folders with Windows ACLs.
-    let mode = fs::set_permissions(&file, fs::Permissions::from_mode(0o640))
-        .and_then(|()| fs::metadata(&file))
-        .map(|meta| meta.permissions().mode() & 0o777);
-    checks.push(match mode {
-        Ok(0o640) => check("chmod", Outcome::Works, None),
-        Ok(other) => check("chmod", Outcome::Fails, format!("640 → {other:o}")),
-        Err(e) => check("chmod", Outcome::Fails, e.to_string()),
-    });
-
-    // Owner: own files should show as one's own.
-    let owner = fs::metadata(&file).map(|meta| meta.uid());
-    checks.push(match (owner, own_uid()) {
-        (Ok(uid), Some(own)) if uid == own => check("owner", Outcome::Works, None),
-        (Ok(uid), _) => check("owner", Outcome::Limited, format!("uid {uid}")),
-        (Err(e), _) => check("owner", Outcome::Fails, e.to_string()),
-    });
+    #[cfg(unix)]
+    unix_permissions(&file, &mut checks);
 
     // Modification time, as build tools and sync programs use it.
     let when = SystemTime::UNIX_EPOCH + Duration::from_secs(1_577_836_800);
@@ -124,6 +111,70 @@ pub fn run(root: &Path) -> Result<Vec<Check>, String> {
         Err(e) => check("rename-over", Outcome::Fails, e.to_string()),
     });
 
+    #[cfg(unix)]
+    unix_links(dir, &file, &mut checks);
+
+    // Locks are granted, but only on this computer: SFTP does not pass them on.
+    let locked = File::open(&file).and_then(|handle| {
+        handle.try_lock().map_err(std::io::Error::other)?;
+        handle.unlock()
+    });
+    checks.push(match locked {
+        Ok(()) => check("lock", Outcome::Limited, None),
+        Err(e) => check("lock", Outcome::Fails, e.to_string()),
+    });
+
+    // Files beyond 4 GiB, which FAT and some WebDAV servers refuse. Sparse, so fast
+    // with sshfs; rclone would upload all of it, so Windows leaves this out.
+    #[cfg(unix)]
+    large_file(dir, &mut checks);
+
+    Ok(checks)
+}
+
+#[cfg(unix)]
+fn large_file(dir: &Path, checks: &mut Vec<Check>) {
+    let big = dir.join("big");
+    let size = 5u64 << 30;
+    let large = File::create(&big).and_then(|mut handle| {
+        handle.seek(SeekFrom::Start(size - 1))?;
+        handle.write_all(&[1])?;
+        handle.sync_all()?;
+        fs::metadata(&big).map(|meta| meta.len())
+    });
+    let _ = fs::remove_file(&big);
+    checks.push(match large {
+        Ok(len) if len == size => check("large-file", Outcome::Works, None),
+        Ok(len) => check("large-file", Outcome::Fails, format!("{len} bytes")),
+        Err(e) => check("large-file", Outcome::Fails, e.to_string()),
+    });
+}
+
+/// Unix permissions and owner; Windows has neither over SFTP.
+#[cfg(unix)]
+fn unix_permissions(file: &Path, checks: &mut Vec<Check>) {
+    // Unix permissions: DSM ignores them in folders with Windows ACLs.
+    let mode = fs::set_permissions(file, fs::Permissions::from_mode(0o640))
+        .and_then(|()| fs::metadata(file))
+        .map(|meta| meta.permissions().mode() & 0o777);
+    checks.push(match mode {
+        Ok(0o640) => check("chmod", Outcome::Works, None),
+        Ok(other) => check("chmod", Outcome::Fails, format!("640 → {other:o}")),
+        Err(e) => check("chmod", Outcome::Fails, e.to_string()),
+    });
+
+    // Owner: own files should show as one's own.
+    let owner = fs::metadata(file).map(|meta| meta.uid());
+    checks.push(match (owner, own_uid()) {
+        (Ok(uid), Some(own)) if uid == own => check("owner", Outcome::Works, None),
+        (Ok(uid), _) => check("owner", Outcome::Limited, format!("uid {uid}")),
+        (Err(e), _) => check("owner", Outcome::Fails, e.to_string()),
+    });
+}
+
+/// Links and extended attributes, which only sshfs passes on.
+#[cfg(unix)]
+fn unix_links(dir: &Path, file: &Path, checks: &mut Vec<Check>) {
     // Symbolic links: created and read back.
     let link = dir.join("link");
     let symlink = std::os::unix::fs::symlink("data", &link).and_then(|()| fs::read_link(&link));
@@ -142,44 +193,16 @@ pub fn run(root: &Path) -> Result<Vec<Check>, String> {
 
     // Hard links.
     let hard = dir.join("hard");
-    checks.push(match fs::hard_link(&file, &hard) {
+    checks.push(match fs::hard_link(file, &hard) {
         Ok(()) => check("hardlink", Outcome::Works, None),
         Err(e) => check("hardlink", Outcome::Fails, e.to_string()),
     });
 
     // Extended attributes: SFTP has none.
-    checks.push(match xattr::set(&file, "user.syno-mount", b"1") {
+    checks.push(match xattr::set(file, "user.syno-mount", b"1") {
         Ok(()) => check("xattr", Outcome::Works, None),
         Err(e) => check("xattr", Outcome::Fails, e.to_string()),
     });
-
-    // Locks are granted, but only on this computer: SFTP does not pass them on.
-    let locked = File::open(&file).and_then(|handle| {
-        handle.try_lock().map_err(std::io::Error::other)?;
-        handle.unlock()
-    });
-    checks.push(match locked {
-        Ok(()) => check("lock", Outcome::Limited, None),
-        Err(e) => check("lock", Outcome::Fails, e.to_string()),
-    });
-
-    // Files beyond 4 GiB, which FAT and some WebDAV servers refuse. Sparse, so fast.
-    let big = dir.join("big");
-    let size = 5u64 << 30;
-    let large = File::create(&big).and_then(|mut handle| {
-        handle.seek(SeekFrom::Start(size - 1))?;
-        handle.write_all(&[1])?;
-        handle.sync_all()?;
-        fs::metadata(&big).map(|meta| meta.len())
-    });
-    let _ = fs::remove_file(&big);
-    checks.push(match large {
-        Ok(len) if len == size => check("large-file", Outcome::Works, None),
-        Ok(len) => check("large-file", Outcome::Fails, format!("{len} bytes")),
-        Err(e) => check("large-file", Outcome::Fails, e.to_string()),
-    });
-
-    Ok(checks)
 }
 
 /// Throughput of one large file and many small ones.

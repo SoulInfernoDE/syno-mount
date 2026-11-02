@@ -8,6 +8,7 @@
 //! appear in URLs or server logs. Certificates are checked by the system or pinned
 //! after the user trusted them (see [`tls`]).
 
+mod accounts;
 mod cpu;
 mod files;
 mod overview;
@@ -21,6 +22,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
+pub use accounts::{Access, Account, AdminShare, Permission, SftpRule, ShareAccess};
 pub use files::{CpuKind, Services, Share};
 pub use overview::{Drive, DriveKind, Health, NetworkPort, Overview, Volume};
 pub use setup::{
@@ -29,16 +31,23 @@ pub use setup::{
 use tls::Verdict;
 
 /// Session name sent to DSM; it shows up in DSM's list of signed-in connections.
-const SESSION_NAME: &str = "SynoMount";
+/// DSM refuses accounts outside the administrators (error 402) for session names it
+/// does not know; "FileStation" is open to everyone and still allows the admin APIs.
+const SESSION_NAME: &str = "FileStation";
 
 /// APIs this client uses, looked up once per sign-in.
 const APIS: &[&str] = &[
     "SYNO.API.Auth",
+    "SYNO.Core.AppPriv.Rule",
     "SYNO.Core.FileServ.FTP.SFTP",
+    "SYNO.Core.Group.Member",
     "SYNO.Core.Network",
     "SYNO.Core.Network.Ethernet",
+    "SYNO.Core.Share",
+    "SYNO.Core.Share.Permission",
     "SYNO.Core.System",
     "SYNO.Core.System.Utilization",
+    "SYNO.Core.User",
     "SYNO.Core.User.Home",
     "SYNO.FileStation.List",
     "SYNO.Storage.CGI.Storage",

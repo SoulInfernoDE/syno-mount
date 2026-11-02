@@ -6,11 +6,11 @@
 
 > English original. German version: [README.de.md](README.de.md)
 
-**Syno Mount** mounts the shared folders of a **Synology NAS** on **Linux** over **SSHFS**, set up by a guided assistant. Folders are encrypted on the way, keep Unix permissions and timestamps, work on the LAN and over the internet, mount at login and come back after suspend or a network change.
+**Syno Mount** mounts the shared folders of a **Synology NAS** on **Linux** (over **SSHFS**) and **Windows** (as network drives through **rclone** and **WinFsp**), set up by a guided assistant. Folders are encrypted on the way, keep Unix permissions and timestamps, work on the LAN and over the internet, mount at login and come back after suspend or a network change.
 
 It is made for people who found SMB and WebDAV wanting: programs and games that fail on network drives because metadata is missing, WebDAV that drops large files. A **self-test** shows for every folder what it can do before you rely on it.
 
-> **Status: 0.5, first release.** Tested against Virtual DSM 7.2.2 with an administrator and a regular account. Downloads: [releases](https://github.com/SoulInfernoDE/syno-mount/releases). See the [roadmap](ROADMAP.md).
+> **Status: 0.6.** Linux is tested against Virtual DSM 7.2.2 with an administrator and a regular account; the administrator area as well. **Windows is new and not yet tested on a real Windows computer.** Downloads: [releases](https://github.com/SoulInfernoDE/syno-mount/releases). See the [roadmap](ROADMAP.md).
 >
 > Syno Mount is an independent community project. It is not affiliated with, endorsed by or supported by Synology Inc. "Synology" and "DSM" are trademarks of Synology Inc.
 
@@ -27,6 +27,11 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
 - **Mounts each folder** with one systemd user service: at login if you like, `reconnect`, keep-alives, the fastest cipher for the NAS's processor, parallel connections. Own files show as yours (owner mapping).
 - **Keeps folders mounted:** a small agent notices suspend and network changes, releases hanging mounts and mounts again, and switches between the LAN and the internet address.
 - **Self-test and speed test** per folder, a status page with route and latency, the exact `sshfs` command to read, and **undo** of everything, including the key on the NAS.
+- **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. Nothing changes in DSM before you confirm the list of changes.
+
+<p align="center">
+  <img src="docs/images/admin.en.png" alt="The administrator area: accounts with their SFTP privilege and access to the shared folder Games, and whether each is ready for Syno Mount" width="760">
+</p>
 
 <p align="center">
   <img src="docs/images/selftest.en.png" alt="Self-test of a folder: permissions, owner, times, renaming and hard links work; symbolic links and locks are limited; extended attributes do not work" width="760">
@@ -52,15 +57,28 @@ sudo synoacltool -del /volume1/<share>/<folder>
 
 Afterwards the folder belongs to its owner with the mode it has; set it with `chmod` as usual. Do this only for folders that one account uses: DSM's permission settings no longer apply to them.
 
+## Windows
+
+On Windows each folder becomes a **network drive** (from `Z:` down) or a folder. [rclone](https://rclone.org) speaks SFTP and [WinFsp](https://winfsp.dev) provides the drive; both are free software and install with winget:
+
+```powershell
+winget install -e --id WinFsp.WinFsp
+winget install -e --id Rclone.Rclone
+```
+
+The assistant, the key, the pinned host key and the administrator area work as on Linux. A small agent (`syno-mount.exe agent`, started at sign-in through the user's `Run` key) starts one rclone per folder, restarts it when it ends or hangs, and moves between the LAN and the internet address. Windows has no Unix permissions or owner mapping, so the self-test checks reading, writing, times, renaming and locks.
+
+Why not SSHFS-Win: its last release is from 2021, while rclone and WinFsp are maintained.
+
 ## Install
 
-Syno Mount needs `sshfs` (3.x, best 3.7 or newer) and FUSE 3 from the distribution. The packages pull them in; for the AppImage install them yourself:
+On Linux, Syno Mount needs `sshfs` (3.x, best 3.7 or newer) and FUSE 3 from the distribution. The packages pull them in; for the AppImage install them yourself:
 
 ```bash
 sudo apt install sshfs
 ```
 
-Then install the package for your system from the [releases](https://github.com/SoulInfernoDE/syno-mount/releases): `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) or `.AppImage`, each for x86_64 and arm64.
+Then install the package for your system from the [releases](https://github.com/SoulInfernoDE/syno-mount/releases): `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) or `.AppImage`, each for x86_64 and arm64. On Windows: `-setup.exe` (per user) or `.msi`, after WinFsp and rclone (see above).
 
 ## How it works
 
@@ -70,6 +88,8 @@ Then install the package for your system from the [releases](https://github.com/
 | List of folders and NAS                | `~/.config/syno-mount`                        |
 | One service per folder, plus the agent | `~/.config/systemd/user/syno-mount-*.service` |
 | Which address a folder uses            | `~/.local/state/syno-mount`                   |
+
+On Windows the files live in `%APPDATA%\syno-mount` (list) and `%LOCALAPPDATA%\syno-mount` (keys, `known_hosts`, state and rclone logs).
 
 Your own `~/.ssh` stays untouched. Each service runs `syno-mount run-mount <id>`, which picks the LAN or internet address and then runs `sshfs`; the app shows the full command. More in [docs/architecture.md](docs/architecture.md).
 

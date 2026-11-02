@@ -1,5 +1,6 @@
 <script lang="ts">
   import Add from './components/Add.svelte';
+  import Admin from './components/Admin.svelte';
   import Mounts from './components/Mounts.svelte';
   import Settings from './components/Settings.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -38,6 +39,8 @@
           }}
         />
       {/key}
+    {:else if section === 'admin'}
+      <Admin />
     {:else if section === 'system'}
       <SystemPanel />
     {:else}

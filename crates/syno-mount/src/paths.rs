@@ -27,6 +27,30 @@ fn base(variable: &str, home: &std::path::Path, fallback: &str) -> PathBuf {
 }
 
 impl Paths {
+    /// Windows: `%APPDATA%\syno-mount` for settings, `%LOCALAPPDATA%\syno-mount`
+    /// for keys and state.
+    #[cfg(windows)]
+    pub fn from_env() -> Self {
+        let home = env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| "C:\\".into());
+        let roaming = env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData\\Roaming"));
+        let local = env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData\\Local"));
+        Self {
+            config: roaming.join("syno-mount"),
+            data: local.join("syno-mount"),
+            state: local.join("syno-mount").join("state"),
+            units: PathBuf::new(),
+            xdg_config: roaming,
+            home,
+        }
+    }
+
+    #[cfg(unix)]
     pub fn from_env() -> Self {
         let home = env::var_os("HOME")
             .map(PathBuf::from)

@@ -225,6 +225,47 @@ done-text = { $count ->
     } set up. A self-test shows what each can do.
 done-finish = Show the folders
 
+## Administrator area
+
+nav-admin = Accounts on the NAS
+admin-title = Accounts on the NAS
+admin-subtitle = Which DSM accounts may use SFTP and which shared folders they may open. Needs an administrator; nothing is changed before you confirm.
+admin-signin-text = Sign in with an administrator account. { -app-name } reads accounts, shared folders and privileges; the password is not stored.
+admin-sign-out = Sign out
+admin-accounts = Accounts
+admin-share = Shared folder
+admin-share-acl = This folder uses Windows ACLs: DSM ignores chmod inside (see the README).
+admin-account = Account
+admin-sftp = SFTP
+admin-permission = Access to { $share }
+admin-ready = Syno Mount
+admin-badge-admin = Administrator
+admin-badge-disabled = Disabled
+admin-sftp-default = Default (everyone)
+admin-sftp-allowed = Allowed
+admin-sftp-denied = Denied
+admin-permission-none = Not set
+admin-permission-via-admins = Through administrators
+admin-permission-deny = No access
+admin-permission-readOnly = Read only
+admin-permission-readWrite = Read and write
+admin-permission-custom = Custom (ACL editor)
+admin-ready-yes = Ready
+admin-ready-no = Not ready
+admin-note = Shown are each account's own settings. Group permissions come on top; "No access" always wins. An account is ready when it is enabled, may use SFTP and reaches the folder.
+admin-saved = Saved in DSM.
+admin-discard = Discard
+admin-apply = { $count ->
+        [0] Apply
+        [one] Apply one change
+       *[other] Apply { $count } changes
+    }
+admin-confirm-title = Change DSM settings?
+admin-confirm-text = These changes are made on { $name } (Control Panel › Application Privileges and Shared Folder › Permissions):
+admin-change-sftp = { $account }: SFTP { $value }
+admin-change-share = { $account } on { $share }: { $value }
+admin-confirm = Change
+
 ## This computer
 
 system-title = This computer
@@ -239,6 +280,11 @@ system-systemd = systemd user services
 system-systemd-missing = Not running: mounts cannot start at login.
 system-ok = Present
 system-install = Install what is missing:
+system-text-windows = What Syno Mount needs on Windows: WinFsp for the drives and rclone for SFTP.
+system-rclone = rclone
+system-winfsp = WinFsp
+settings-at-login-hint-windows = The Syno Mount agent starts at sign-in and connects the drive.
+folders-local-windows = Drive letter or folder on this computer
 system-again = Check again
 
 ## Settings

@@ -22,11 +22,15 @@ const names = {
   deb: () => `syno-mount_${version}_${arm ? 'arm64' : 'amd64'}.deb`,
   rpm: () => `syno-mount-${version}-1.${arm ? 'aarch64' : 'x86_64'}.rpm`,
   appimage: () => `syno-mount-${version}-${arm ? 'aarch64' : 'x86_64'}.AppImage`,
+  msi: () => `syno-mount-${version}-windows-x64.msi`,
+  nsis: () => `syno-mount-${version}-windows-x64-setup.exe`,
 };
 const extensions = {
   deb: '.deb',
   rpm: '.rpm',
   appimage: '.AppImage',
+  msi: '.msi',
+  nsis: '.exe',
 };
 
 mkdirSync(outDir, { recursive: true });

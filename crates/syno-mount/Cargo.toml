@@ -15,8 +15,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 syno-dsm = { path = "../syno-dsm" }
 syno-ssh = { path = "../syno-ssh" }
-xattr = "1.6.1"
 tokio = { version = "1.54.1", features = ["rt", "time", "net", "macros", "process"] }
+
+[target.'cfg(unix)'.dependencies]
+xattr = "1.6.1"
 
 [dev-dependencies]
 tempfile = "3"

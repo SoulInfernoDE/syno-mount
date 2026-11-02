@@ -12,6 +12,34 @@ use crate::config::{Address, Mount};
 use crate::paths::Paths;
 use crate::sshfs::Route;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum State {
+    /// Mounted and answering.
+    Mounted,
+    /// Mounted, but the connection hangs.
+    Stale,
+    /// The service is waiting for the NAS or connecting.
+    Connecting,
+    Stopped,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MountStatus {
+    pub id: String,
+    pub state: State,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connected: Option<Connected>,
+    /// Round trip of a TCP connect to the address in use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
+    /// The service's last words when it failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
+}
+
 /// Undoes the octal escapes of `/proc/self/mountinfo` ("\040" is a space).
 fn unescape(field: &str) -> String {
     let bytes = field.as_bytes();
@@ -47,9 +75,16 @@ pub fn sshfs_mounts(mountinfo: &str) -> Vec<(PathBuf, String)> {
         .collect()
 }
 
+#[cfg(unix)]
 pub fn is_mounted(path: &Path) -> bool {
     let info = fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
     sshfs_mounts(&info).iter().any(|(point, _)| point == path)
+}
+
+/// A drive letter or folder that WinFsp shows only while rclone runs.
+#[cfg(windows)]
+pub fn is_mounted(path: &Path) -> bool {
+    path.exists()
 }
 
 /// Whether the mount answers within `timeout`. A mount whose connection is gone

@@ -110,12 +110,12 @@ pub enum ConnectOutcome {
     Failed(Failure),
 }
 
-/// Signs in to DSM and starts the assistant for this NAS.
-#[tauri::command]
-pub async fn connect(
+/// Signs in to DSM and remembers the NAS in the list. `Err` carries the answer for
+/// the interface when DSM wants something first (a code, trust in a certificate).
+pub(crate) async fn sign_in(
     request: ConnectRequest,
-    state: State<'_, AppState>,
-) -> Result<ConnectOutcome, Failure> {
+    state: &AppState,
+) -> Result<Result<(Client, Session, KnownDevice), ConnectOutcome>, Failure> {
     let host = request.host.trim().to_owned();
     let id = device_id(&host, request.port);
     let account = request.account.trim().to_owned();
@@ -140,14 +140,16 @@ pub async fn connect(
     let session = match client.login(&credentials).await {
         Ok(session) => session,
         Err(Error::UntrustedCertificate { fingerprint }) => {
-            return Ok(ConnectOutcome::UntrustedCertificate { fingerprint });
+            return Ok(Err(ConnectOutcome::UntrustedCertificate { fingerprint }));
         }
         Err(Error::CertificateChanged { fingerprint }) => {
-            return Ok(ConnectOutcome::CertificateChanged { fingerprint });
+            return Ok(Err(ConnectOutcome::CertificateChanged { fingerprint }));
         }
-        Err(Error::Auth(AuthError::OtpRequired)) => return Ok(ConnectOutcome::OtpRequired),
-        Err(Error::Auth(AuthError::PermissionDenied)) => return Ok(ConnectOutcome::NotAllowed),
-        Err(error) => return Ok(ConnectOutcome::Failed(error.into())),
+        Err(Error::Auth(AuthError::OtpRequired)) => return Ok(Err(ConnectOutcome::OtpRequired)),
+        Err(Error::Auth(AuthError::PermissionDenied)) => {
+            return Ok(Err(ConnectOutcome::NotAllowed));
+        }
+        Err(error) => return Ok(Err(ConnectOutcome::Failed(error.into()))),
     };
 
     let (name, model) = client.identity(&session).await;
@@ -163,7 +165,7 @@ pub async fn connect(
             .or(request.model)
             .or_else(|| known.as_ref().map(|device| device.model.clone()))
             .unwrap_or_default(),
-        host: host.clone(),
+        host,
         port: request.port,
         account,
         fingerprint: pin,
@@ -171,6 +173,21 @@ pub async fn connect(
     if let Ok(mut store) = state.devices.lock() {
         store.upsert(device.clone()).map_err(Failure::io)?;
     }
+    Ok(Ok((client, session, device)))
+}
+
+/// Signs in to DSM and starts the assistant for this NAS.
+#[tauri::command]
+pub async fn connect(
+    request: ConnectRequest,
+    state: State<'_, AppState>,
+) -> Result<ConnectOutcome, Failure> {
+    let password = request.password.clone();
+    let (client, session, device) = match sign_in(request, &state).await? {
+        Ok(signed_in) => signed_in,
+        Err(outcome) => return Ok(outcome),
+    };
+    let host = device.host.clone();
     let dsm_shares = client.shares(&session).await.ok();
     let cpu = client.cpu_kind(&session).await;
     let ssh_port = client
@@ -181,7 +198,7 @@ pub async fn connect(
     let previous = state.pending.lock().await.replace(Pending {
         device: device.clone(),
         dsm: Some((client, session)),
-        password: Some(request.password),
+        password: Some(password),
         ssh: Address {
             host,
             port: ssh_port,
@@ -392,13 +409,19 @@ fn choices(state: &AppState, pending: &Pending, installed: &Installed) -> Vec<Sh
             .collect(),
         None => installed.shares.clone(),
     };
+    // Windows: one free drive letter per folder, from Z: down.
+    let mut letters = core::free_drive_letters().into_iter();
     shares
         .into_iter()
         .map(|share| ShareChoice {
             remote_path: installed
                 .layout
                 .share_path(&share.name, share.volume_path.as_deref()),
-            default_folder: core::default_folder(&state.paths, &pending.device.name, &share.name),
+            default_folder: if cfg!(windows) {
+                letters.next().unwrap_or_else(|| "Z:\\".into())
+            } else {
+                core::default_folder(&state.paths, &pending.device.name, &share.name)
+            },
             mounted: mounts
                 .iter()
                 .any(|mount| mount.id == Mount::make_id(&pending.device.id, &share.name)),

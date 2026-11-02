@@ -3,6 +3,7 @@
   import FolderSync from '@lucide/svelte/icons/folder-sync';
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import Monitor from '@lucide/svelte/icons/monitor';
+  import UserCog from '@lucide/svelte/icons/user-cog';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import icon from '../../../assets/branding/icon.svg';
   import { t } from '../lib/i18n.svelte';
@@ -13,6 +14,7 @@
   const top: { id: Section; label: string; icon: Component }[] = [
     { id: 'mounts', label: 'nav-mounts', icon: FolderSync },
     { id: 'add', label: 'nav-add', icon: FolderPlus },
+    { id: 'admin', label: 'nav-admin', icon: UserCog },
   ];
   const bottom: { id: Section; label: string; icon: Component }[] = [
     { id: 'system', label: 'nav-system', icon: Monitor },

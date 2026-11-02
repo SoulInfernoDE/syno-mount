@@ -34,12 +34,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage"],
+    "targets": ["deb", "rpm", "appimage", "msi", "nsis"],
     "category": "Utility",
-    "shortDescription": "Synology shared folders on Linux over SSHFS",
-    "longDescription": "Guided setup of SSHFS mounts for Synology NAS: SSH key, pinned host key, mounts at login, reconnect after suspend and network changes, LAN and internet addresses, and a self-test of what each folder can do. Independent community project, not affiliated with Synology Inc.",
+    "shortDescription": "Synology shared folders over SFTP on Linux and Windows",
+    "longDescription": "Guided setup of SFTP mounts for Synology NAS: SSH key, pinned host key, mounts at sign-in, reconnect after suspend and network changes, LAN and internet addresses, a self-test of what each folder can do, and an administrator area for account access. Linux uses sshfs, Windows rclone and WinFsp. Independent community project, not affiliated with Synology Inc.",
     "license": "GPL-3.0-or-later",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
     "linux": {
       "deb": {
         "depends": ["sshfs", "fuse3"],
@@ -48,6 +54,16 @@
       "rpm": {
         "depends": ["fuse-sshfs", "fuse3"],
         "desktopTemplate": "linux/syno-mount.desktop"
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "German"],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US"
       }
     }
   }

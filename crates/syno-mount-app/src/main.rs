@@ -1,9 +1,13 @@
-//! Syno Mount: Synology shared folders on Linux over SSHFS.
+//! Syno Mount: Synology shared folders over SFTP, on Linux and Windows.
 //!
-//! Without arguments the app opens its window. systemd starts the same program
-//! with `run-mount <id>` (one mount) and `agent` (remounts after suspend and
-//! network changes); those run without a window.
+//! Without arguments the app opens its window. `agent` keeps the folders mounted
+//! (started by systemd on Linux, at sign-in on Windows), and on Linux systemd starts
+//! `run-mount <id>` for each folder; those run without a window.
 
+// No console window next to the app (or the agent) on Windows release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod admin;
 mod devices;
 mod failure;
 mod mounts;
@@ -76,6 +80,12 @@ fn main() -> ExitCode {
             mounts::speed_test,
             mounts::open_folder,
             mounts::command_line,
+            admin::admin_connect,
+            admin::admin_overview,
+            admin::admin_share_access,
+            admin::admin_apply,
+            admin::admin_enable_services,
+            admin::admin_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Syno Mount");

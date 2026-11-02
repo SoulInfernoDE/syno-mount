@@ -3,6 +3,7 @@
   import SelfTest from './SelfTest.svelte';
   import {
     commandLine,
+    isWindows,
     parseAddress,
     removeMount,
     selfTest,
@@ -197,17 +198,20 @@
       <label class="check-row">
         <input type="checkbox" bind:checked={atLogin} />
         <span
-          >{t('settings-at-login')}<span class="subtle block">{t('settings-at-login-hint')}</span
+          >{t('settings-at-login')}<span class="subtle block"
+            >{t(isWindows() ? 'settings-at-login-hint-windows' : 'settings-at-login-hint')}</span
           ></span
         >
       </label>
-      <label class="check-row">
-        <input type="checkbox" bind:checked={bookmark} />
-        <span
-          >{t('settings-bookmark')}<span class="subtle block">{t('settings-bookmark-hint')}</span
-          ></span
-        >
-      </label>
+      {#if !isWindows()}
+        <label class="check-row">
+          <input type="checkbox" bind:checked={bookmark} />
+          <span
+            >{t('settings-bookmark')}<span class="subtle block">{t('settings-bookmark-hint')}</span
+            ></span
+          >
+        </label>
+      {/if}
       <label class="field">
         <span>{t('settings-internet')}</span>
         <input
@@ -236,13 +240,15 @@
         </select>
         <span class="subtle">{t('settings-connections-hint')}</span>
       </label>
-      <label class="check-row">
-        <input type="checkbox" bind:checked={compress} />
-        <span
-          >{t('settings-compress')}<span class="subtle block">{t('settings-compress-hint')}</span
-          ></span
-        >
-      </label>
+      {#if !isWindows()}
+        <label class="check-row">
+          <input type="checkbox" bind:checked={compress} />
+          <span
+            >{t('settings-compress')}<span class="subtle block">{t('settings-compress-hint')}</span
+            ></span
+          >
+        </label>
+      {/if}
       <label class="field">
         <span>{t('settings-cache')}</span>
         <select class="select" bind:value={cache}>

@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::io::{self, Read, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -39,6 +40,7 @@ impl KeyPair {
             .map_err(|error| Error::Io(error.to_string()))?;
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
+            #[cfg(unix)]
             fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
         }
         write_private(path, pem.as_bytes())?;
@@ -63,14 +65,15 @@ impl KeyPair {
     }
 }
 
+/// Writes a file only its owner may read. On Windows the user's profile folders
+/// are private already.
 fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let temporary = path.with_extension("tmp");
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&temporary)?;
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(&temporary)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     fs::rename(&temporary, path)
@@ -163,8 +166,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("keys/nas");
         let created = KeyPair::load_or_create(&path, "syno-mount:test").unwrap();
-        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
+        #[cfg(unix)]
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         assert!(created.authorized_line().starts_with("ssh-ed25519 "));
         assert!(created.authorized_line().ends_with(" syno-mount:test"));
         let loaded = KeyPair::load_or_create(&path, "other").unwrap();

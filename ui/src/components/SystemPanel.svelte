@@ -21,45 +21,60 @@
 
   onMount(load);
 
-  const rows = $derived(
-    check
-      ? [
-          {
-            label: t('system-sshfs'),
-            ok: check.sshfs !== null,
-            warn: check.sshfs !== null && !check.sshfsParallel,
-            text: check.sshfs
-              ? t(check.sshfsParallel ? 'system-sshfs-version' : 'system-sshfs-old', {
-                  version: check.sshfs,
-                })
-              : t('system-missing'),
-          },
-          {
-            label: t('system-fusermount'),
-            ok: check.fusermount,
-            warn: false,
-            text: t(check.fusermount ? 'system-ok' : 'system-missing'),
-          },
-          {
-            label: t('system-fuse-device'),
-            ok: check.fuseDevice,
-            warn: false,
-            text: t(check.fuseDevice ? 'system-ok' : 'system-missing'),
-          },
-          {
-            label: t('system-systemd'),
-            ok: check.systemdUser,
-            warn: false,
-            text: t(check.systemdUser ? 'system-ok' : 'system-systemd-missing'),
-          },
-        ]
-      : [],
-  );
+  const rows = $derived.by(() => {
+    if (!check) return [];
+    if (check.platform === 'windows') {
+      return [
+        {
+          label: t('system-rclone'),
+          ok: check.rclone !== null,
+          warn: false,
+          text: check.rclone ?? t('system-missing'),
+        },
+        {
+          label: t('system-winfsp'),
+          ok: check.winfsp,
+          warn: false,
+          text: t(check.winfsp ? 'system-ok' : 'system-missing'),
+        },
+      ];
+    }
+    return [
+      {
+        label: t('system-sshfs'),
+        ok: check.sshfs !== null,
+        warn: check.sshfs !== null && !check.sshfsParallel,
+        text: check.sshfs
+          ? t(check.sshfsParallel ? 'system-sshfs-version' : 'system-sshfs-old', {
+              version: check.sshfs,
+            })
+          : t('system-missing'),
+      },
+      {
+        label: t('system-fusermount'),
+        ok: check.fusermount,
+        warn: false,
+        text: t(check.fusermount ? 'system-ok' : 'system-missing'),
+      },
+      {
+        label: t('system-fuse-device'),
+        ok: check.fuseDevice,
+        warn: false,
+        text: t(check.fuseDevice ? 'system-ok' : 'system-missing'),
+      },
+      {
+        label: t('system-systemd'),
+        ok: check.systemdUser,
+        warn: false,
+        text: t(check.systemdUser ? 'system-ok' : 'system-systemd-missing'),
+      },
+    ];
+  });
 </script>
 
 <div class="page">
   <h1>{t('system-title')}</h1>
-  <p class="muted">{t('system-text')}</p>
+  <p class="muted">{t(check?.platform === 'windows' ? 'system-text-windows' : 'system-text')}</p>
 
   <section class="card">
     <ul>

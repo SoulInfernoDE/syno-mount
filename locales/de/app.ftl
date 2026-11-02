@@ -225,6 +225,47 @@ done-text = { $count ->
     } eingerichtet. Ein Selbsttest zeigt, was jeder kann.
 done-finish = Zu den Freigaben
 
+## Adminbereich
+
+nav-admin = Konten auf dem NAS
+admin-title = Konten auf dem NAS
+admin-subtitle = Welche DSM-Konten SFTP nutzen dürfen und welche Freigaben sie öffnen dürfen. Braucht einen Administrator; vor deiner Bestätigung wird nichts geändert.
+admin-signin-text = Melde dich mit einem Administratorkonto an. { -app-name } liest Konten, Freigaben und Rechte; das Passwort wird nicht gespeichert.
+admin-sign-out = Abmelden
+admin-accounts = Konten
+admin-share = Freigabe
+admin-share-acl = Diese Freigabe nutzt Windows-ACLs: DSM ignoriert darin chmod (siehe README).
+admin-account = Konto
+admin-sftp = SFTP
+admin-permission = Zugriff auf { $share }
+admin-ready = Syno Mount
+admin-badge-admin = Administrator
+admin-badge-disabled = Deaktiviert
+admin-sftp-default = Standard (alle)
+admin-sftp-allowed = Erlaubt
+admin-sftp-denied = Verweigert
+admin-permission-none = Nicht gesetzt
+admin-permission-via-admins = Über Administratoren
+admin-permission-deny = Kein Zugriff
+admin-permission-readOnly = Nur lesen
+admin-permission-readWrite = Lesen und schreiben
+admin-permission-custom = Angepasst (ACL-Editor)
+admin-ready-yes = Bereit
+admin-ready-no = Nicht bereit
+admin-note = Gezeigt werden die eigenen Einstellungen jedes Kontos. Gruppenrechte kommen hinzu; „Kein Zugriff“ gewinnt immer. Ein Konto ist bereit, wenn es aktiv ist, SFTP nutzen darf und die Freigabe erreicht.
+admin-saved = In DSM gespeichert.
+admin-discard = Verwerfen
+admin-apply = { $count ->
+        [0] Übernehmen
+        [one] Eine Änderung übernehmen
+       *[other] { $count } Änderungen übernehmen
+    }
+admin-confirm-title = DSM-Einstellungen ändern?
+admin-confirm-text = Diese Änderungen werden auf { $name } vorgenommen (Systemsteuerung › Anwendungsberechtigungen und Gemeinsamer Ordner › Berechtigungen):
+admin-change-sftp = { $account }: SFTP { $value }
+admin-change-share = { $account } auf { $share }: { $value }
+admin-confirm = Ändern
+
 ## Dieser Computer
 
 system-title = Dieser Computer
@@ -239,6 +280,11 @@ system-systemd = systemd-User-Dienste
 system-systemd-missing = Läuft nicht: Freigaben können nicht bei der Anmeldung starten.
 system-ok = Vorhanden
 system-install = Fehlendes installieren:
+system-text-windows = Was Syno Mount unter Windows braucht: WinFsp für die Laufwerke und rclone für SFTP.
+system-rclone = rclone
+system-winfsp = WinFsp
+settings-at-login-hint-windows = Der Agent von Syno Mount startet bei der Anmeldung und verbindet das Laufwerk.
+folders-local-windows = Laufwerksbuchstabe oder Ordner auf diesem Computer
 system-again = Erneut prüfen
 
 ## Einstellungen

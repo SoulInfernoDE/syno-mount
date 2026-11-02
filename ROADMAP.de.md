@@ -79,6 +79,15 @@ Inzwischen getestet (Details in der [Testumgebung](docs/test-environment.de.md))
 - [ ] Standby/Aufwachen und ein echter Netzwechsel auf echter Hardware
 - [x] Release-Notes auf Englisch mit deutschem Abschnitt
 
+## v0.6 – Windows und Konten
+
+- [x] Adminbereich: DSM-Konten mit ihrem SFTP-Recht und dem Zugriff auf jede Freigabe, nach Bestätigung geändert; „bereit für Syno Mount“ pro Konto
+- [x] Anmeldung mit dem Sitzungsnamen `FileStation`, damit Konten außerhalb der Administratoren hereinkommen (der eigene Name wurde mit Fehler 402 abgewiesen; Syno Companion hat dasselbe Problem)
+- [x] Windows-Backend: rclone über WinFsp, Netzlaufwerke ab `Z:` abwärts, Agent mit Autostart, rclone-Befehl in der App sichtbar
+- [x] Windows-Installer (`-setup.exe`, `.msi`) im Release-Workflow; Windows in der CI
+- [ ] Windows auf einem echten Windows-Rechner gegen die Test-VM getestet
+- [ ] Windows: WinFsp und rclone aus der App installieren (winget)
+
 ## Später
 
 - [ ] **NFSv4.1**-Backend: echte UID/GID und Locking im LAN; über das Internet nur per VPN (zum Beispiel Tailscale aus dem Paket-Zentrum)

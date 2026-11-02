@@ -38,7 +38,10 @@
   onMount(async () => {
     if (!hasCore()) return;
     void systemCheck().then((check) => {
-      systemReady = check.sshfs !== null && check.fusermount && check.fuseDevice;
+      systemReady =
+        check.platform === 'windows'
+          ? check.rclone !== null && check.winfsp
+          : check.sshfs !== null && check.fusermount && check.fuseDevice;
     });
     await refresh();
     timer = setInterval(refresh, 5000);

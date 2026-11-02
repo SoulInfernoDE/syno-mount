@@ -6,11 +6,11 @@
 
 > Deutsche Fassung. Englisches Original: [README.md](README.md)
 
-**Syno Mount** bindet die Freigaben eines **Synology-NAS** unter **Linux** per **SSHFS** ein, eingerichtet von einem geführten Assistenten. Die Ordner sind unterwegs verschlüsselt, behalten Unix-Rechte und Zeitstempel, funktionieren im LAN und über das Internet, werden bei der Anmeldung eingebunden und kommen nach Standby oder Netzwechsel zurück.
+**Syno Mount** bindet die Freigaben eines **Synology-NAS** unter **Linux** (per **SSHFS**) und **Windows** (als Netzlaufwerke über **rclone** und **WinFsp**) ein, eingerichtet von einem geführten Assistenten. Die Ordner sind unterwegs verschlüsselt, behalten Unix-Rechte und Zeitstempel, funktionieren im LAN und über das Internet, werden bei der Anmeldung eingebunden und kommen nach Standby oder Netzwechsel zurück.
 
 Gemacht für alle, denen SMB und WebDAV nicht reichen: Programme und Spiele, die auf Netzlaufwerken scheitern, weil Metadaten fehlen, und WebDAV, das bei großen Dateien aussteigt. Ein **Selbsttest** zeigt für jeden Ordner, was er kann, bevor du dich darauf verlässt.
 
-> **Stand: 0.5, erste Veröffentlichung.** Getestet mit Virtual DSM 7.2.2, mit einem Administrator- und einem normalen Konto. Downloads: [Releases](https://github.com/SoulInfernoDE/syno-mount/releases). Siehe [Roadmap](ROADMAP.de.md).
+> **Stand: 0.6.** Linux ist mit Virtual DSM 7.2.2 getestet, mit einem Administrator- und einem normalen Konto, ebenso der Adminbereich. **Windows ist neu und noch nicht auf einem echten Windows-Rechner getestet.** Downloads: [Releases](https://github.com/SoulInfernoDE/syno-mount/releases). Siehe [Roadmap](ROADMAP.de.md).
 >
 > Syno Mount ist ein unabhängiges Community-Projekt. Es ist nicht mit Synology Inc. verbunden und wird von Synology weder unterstützt noch empfohlen. „Synology“ und „DSM“ sind Marken der Synology Inc.
 
@@ -27,6 +27,11 @@ Gemacht für alle, denen SMB und WebDAV nicht reichen: Programme und Spiele, die
 - **Bindet jeden Ordner** über einen eigenen systemd-User-Dienst ein: auf Wunsch bei der Anmeldung, mit `reconnect`, Keep-alives, der schnellsten Verschlüsselung für den Prozessor des NAS und parallelen Verbindungen. Eigene Dateien gehören dir (Besitzer-Zuordnung).
 - **Hält Ordner eingebunden:** Ein kleiner Agent bemerkt Standby und Netzwechsel, löst hängende Mounts, bindet neu ein und wechselt zwischen LAN- und Internet-Adresse.
 - **Selbsttest und Geschwindigkeitstest** pro Ordner, eine Statusseite mit Weg und Latenz, der genaue `sshfs`-Befehl zum Nachlesen und **Rückgängig** für alles, auch für den Schlüssel auf dem NAS.
+- **Konten auf dem NAS** (Adminbereich): welche DSM-Konten SFTP nutzen dürfen und welche Freigaben sie öffnen dürfen (kein Zugriff, nur lesen, lesen und schreiben), mit einer Prüfung „bereit für Syno Mount“ pro Konto. In DSM ändert sich nichts, bevor du die Liste der Änderungen bestätigst.
+
+<p align="center">
+  <img src="docs/images/admin.de.png" alt="Der Adminbereich: Konten mit ihrem SFTP-Recht und dem Zugriff auf die Freigabe Games, und ob jedes bereit für Syno Mount ist" width="760">
+</p>
 
 <p align="center">
   <img src="docs/images/selftest.de.png" alt="Selbsttest eines Ordners: Rechte, Besitzer, Zeiten, Umbenennen und harte Links funktionieren; symbolische Links und Sperren sind eingeschränkt; erweiterte Attribute funktionieren nicht" width="760">
@@ -52,15 +57,28 @@ sudo synoacltool -del /volume1/<freigabe>/<ordner>
 
 Danach gehört der Ordner seinem Besitzer mit den Rechten, die er hat; setze sie wie gewohnt mit `chmod`. Mach das nur für Ordner, die ein einziges Konto nutzt: Die Rechte-Einstellungen von DSM gelten für sie dann nicht mehr.
 
+## Windows
+
+Unter Windows wird jeder Ordner ein **Netzlaufwerk** (ab `Z:` abwärts) oder ein Ordner. [rclone](https://rclone.org) spricht SFTP, [WinFsp](https://winfsp.dev) stellt das Laufwerk bereit; beides ist freie Software und lässt sich mit winget installieren:
+
+```powershell
+winget install -e --id WinFsp.WinFsp
+winget install -e --id Rclone.Rclone
+```
+
+Assistent, Schlüssel, festgehaltener Host-Key und Adminbereich funktionieren wie unter Linux. Ein kleiner Agent (`syno-mount.exe agent`, bei der Anmeldung über den `Run`-Schlüssel des Nutzers gestartet) startet pro Ordner ein rclone, startet es neu, wenn es endet oder hängt, und wechselt zwischen LAN- und Internet-Adresse. Windows kennt über SFTP keine Unix-Rechte und keine Besitzer-Zuordnung; der Selbsttest prüft deshalb Lesen, Schreiben, Zeiten, Umbenennen und Sperren.
+
+Warum nicht SSHFS-Win: Die letzte Version stammt von 2021, rclone und WinFsp werden dagegen gepflegt.
+
 ## Installation
 
-Syno Mount braucht `sshfs` (3.x, am besten 3.7 oder neuer) und FUSE 3 aus der Distribution. Die Pakete ziehen beides nach; für das AppImage installierst du es selbst:
+Unter Linux braucht Syno Mount `sshfs` (3.x, am besten 3.7 oder neuer) und FUSE 3 aus der Distribution. Die Pakete ziehen beides nach; für das AppImage installierst du es selbst:
 
 ```bash
 sudo apt install sshfs
 ```
 
-Dann das Paket für dein System aus den [Releases](https://github.com/SoulInfernoDE/syno-mount/releases) installieren: `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) oder `.AppImage`, jeweils für x86_64 und arm64.
+Dann das Paket für dein System aus den [Releases](https://github.com/SoulInfernoDE/syno-mount/releases) installieren: `.deb` (Debian, Ubuntu, Linux Mint), `.rpm` (Fedora, openSUSE) oder `.AppImage`, jeweils für x86_64 und arm64. Unter Windows: `-setup.exe` (pro Benutzer) oder `.msi`, nach WinFsp und rclone (siehe oben).
 
 ## So funktioniert es
 
@@ -70,6 +88,8 @@ Dann das Paket für dein System aus den [Releases](https://github.com/SoulInfern
 | Liste der Ordner und NAS                       | `~/.config/syno-mount`                        |
 | Ein Dienst pro Ordner, dazu der Agent          | `~/.config/systemd/user/syno-mount-*.service` |
 | Welche Adresse ein Ordner gerade nutzt         | `~/.local/state/syno-mount`                   |
+
+Unter Windows liegen die Dateien in `%APPDATA%\syno-mount` (Liste) und `%LOCALAPPDATA%\syno-mount` (Schlüssel, `known_hosts`, Zustand und rclone-Protokolle).
 
 Dein eigenes `~/.ssh` bleibt unberührt. Jeder Dienst startet `syno-mount run-mount <id>`, das die LAN- oder Internet-Adresse wählt und dann `sshfs` startet; die App zeigt den vollständigen Befehl. Mehr in [docs/architecture.de.md](docs/architecture.de.md).
 

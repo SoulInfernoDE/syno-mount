@@ -48,3 +48,18 @@ Every 5 seconds the agent compares the time since boot (`/proc/uptime`, which co
 ## Self-test
 
 In a temporary folder inside the mount: write and read 1 MiB, `chmod 640`, owner, `mtime`, rename over a file, symlink and read back, hard link, `user.*` xattr, `flock`, and a sparse 5 GiB file. Locks always count as limited, because SFTP does not pass them on.
+
+## Administrator area
+
+A separate DSM sign-in that must be an administrator. It reads `SYNO.Core.User` (accounts), `SYNO.Core.Group.Member` (members of "administrators"), `SYNO.Core.AppPriv.Rule` for the application `SYNO.SFTP` (the rule for everyone and per-account rules), `SYNO.Core.Share` and, per shared folder, `SYNO.Core.Share.Permission`. Changes are collected in the interface and only sent after the user confirmed the list: an SFTP rule per account is set (`set`) or removed (`delete`, back to the rule for everyone), and the accounts' own permissions on a folder are written in one `set` call. "Custom" permissions from DSM's ACL editor are shown but not changed.
+
+The sign-in uses the session name `FileStation`: DSM refuses accounts outside the administrators with error 402 for session names it does not know, while `FileStation` is open to every account and still allows the administrator APIs.
+
+## Windows
+
+Windows mounts with [rclone](https://rclone.org) through [WinFsp](https://winfsp.dev) instead of sshfs. SSHFS-Win was considered and left aside: its last release is from 2021. The rest is shared: assistant, key, pinned host key, administrator area, self-test.
+
+- **Command:** `rclone mount :sftp,host=…,port=…,user=…,key_file=…,known_hosts_file=…,ciphers=…,shell_type=none,disable_hashcheck=true,set_modtime=true:/<share> Z: --network-mode --vfs-cache-mode writes …`. No rclone config file is written. rclone checks host keys by address, so the pinned key is also written under `host` and `[host]:port` for the LAN and the internet address.
+- **Agent:** `syno-mount.exe agent` holds a lock file, so one runs per user. Every 2 seconds it starts an rclone for each folder that should be mounted (a `<id>.want` file written by the app, or "mount at sign-in"), restarts one that ended (after 5 seconds) or that hangs (checked every 30 seconds), moves back to the LAN when it answers again, and ends rclone for folders that were stopped or removed. rclone's messages go to `<id>.log`; the app shows the last lines when a folder fails.
+- **Autostart:** while any folder should mount at sign-in, the value "Syno Mount" in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` starts the agent.
+- **Self-test:** without permissions, owner, links, xattr and the 5 GiB file (rclone would upload all of it).

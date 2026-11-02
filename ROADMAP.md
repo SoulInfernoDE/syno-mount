@@ -79,6 +79,15 @@ Tested since (details in [test environment](docs/test-environment.md)): DSM 7 pu
 - [ ] Suspend/resume and a real network change on real hardware
 - [x] Release notes in English with a German section
 
+## v0.6 – Windows and accounts
+
+- [x] Administrator area: DSM accounts with their SFTP privilege and access to each shared folder, changed after confirmation; "ready for Syno Mount" per account
+- [x] Sign-in with the session name `FileStation`, so accounts outside the administrators get in (the custom name was refused with error 402; Syno Companion has the same problem)
+- [x] Windows backend: rclone through WinFsp, network drives from `Z:` down, agent with autostart, rclone command shown in the app
+- [x] Windows installers (`-setup.exe`, `.msi`) in the release workflow; Windows in CI
+- [ ] Windows tested on a real Windows computer against the test VM
+- [ ] Windows: install WinFsp and rclone from the app (winget)
+
 ## Later
 
 - [ ] **NFSv4.1** backend: real UID/GID and locking on the LAN; over the internet only through a VPN (for example Tailscale from Package Center)

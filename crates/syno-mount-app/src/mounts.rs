@@ -133,7 +133,7 @@ pub async fn update_mount(
         manager::apply(&paths, &applied)?;
         if running {
             // New options take effect with a new connection.
-            syno_mount::systemd::restart(&applied.unit_name())?;
+            manager::restart(&applied)?;
         }
         Ok(())
     })
@@ -227,7 +227,12 @@ pub async fn speed_test(
 #[tauri::command]
 pub async fn open_folder(id: String, state: State<'_, AppState>) -> Result<(), Failure> {
     let mount = find(&state, &id)?;
-    Command::new("xdg-open")
+    let opener = if cfg!(windows) {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    Command::new(opener)
         .arg(&mount.local_path)
         .spawn()
         .map(|_| ())

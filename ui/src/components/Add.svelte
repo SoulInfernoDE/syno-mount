@@ -1,23 +1,20 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import KeyRound from '@lucide/svelte/icons/key-round';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-  import Server from '@lucide/svelte/icons/server';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import Trash from '@lucide/svelte/icons/trash-2';
+  import DsmSignIn from './DsmSignIn.svelte';
+  import NasPicker from './NasPicker.svelte';
   import SelfTest from './SelfTest.svelte';
   import {
     cancelSetup,
     connect,
     connectSshOnly,
     createMounts,
-    discover,
     enableServices,
-    forgetDevice,
     hasCore,
     installKey,
-    knownDevices,
+    isWindows,
     listMounts,
     moreShares,
     parseAddress,
@@ -27,7 +24,6 @@
     toFailure,
     type Check,
     type Failure,
-    type FoundNas,
     type HostKeyView,
     type Installation,
     type KnownDevice,
@@ -35,6 +31,7 @@
     type ServicesView,
   } from '../lib/backend';
   import { t } from '../lib/i18n.svelte';
+  import type { NasTarget } from '../lib/nav';
 
   let { fromMount, ondone }: { fromMount?: string; ondone: () => void } = $props();
 
@@ -67,37 +64,9 @@
   }
 
   // Step 1: the NAS.
-  interface Target {
-    host: string;
-    port: number;
-    name?: string;
-    model?: string;
-    account?: string;
-  }
-  let saved = $state<KnownDevice[]>([]);
-  let found = $state<FoundNas[]>([]);
-  let searching = $state(false);
-  let address = $state('');
-  let addressInvalid = $state(false);
+  type Target = NasTarget;
   let target = $state<Target | null>(null);
   let device = $state<KnownDevice | null>(null);
-
-  const unsaved = $derived(
-    found.filter(
-      (nas) => !saved.some((known) => known.id === `${nas.host.toLowerCase()}:${nas.port}`),
-    ),
-  );
-
-  async function search() {
-    searching = true;
-    try {
-      found = await discover();
-    } catch (error) {
-      failure = toFailure(error);
-    } finally {
-      searching = false;
-    }
-  }
 
   function choose(next: Target) {
     target = next;
@@ -106,77 +75,18 @@
     step = 'signin';
   }
 
-  function chooseAddress(event: SubmitEvent) {
-    event.preventDefault();
-    const parsed = parseAddress(address);
-    addressInvalid = parsed === null;
-    if (parsed) choose(parsed);
-  }
-
-  async function forget(id: string) {
-    await forgetDevice(id).catch(() => undefined);
-    saved = await knownDevices();
-  }
-
   // Step 2: sign in to DSM, or go by SSH alone.
   let account = $state('');
   let password = $state('');
-  let otp = $state('');
-  let needOtp = $state(false);
-  let certificate = $state<{ fingerprint: string; changed: boolean } | null>(null);
-  let trustFingerprint = $state<string | undefined>();
   let sshOnly = $state(false);
   let notAllowed = $state(false);
   let sshPort = $state(22);
   let nasName = $state('');
 
-  async function signIn(event?: SubmitEvent) {
-    event?.preventDefault();
-    if (!target) return;
-    const current = target;
-    const outcome = await run(() =>
-      connect({
-        host: current.host,
-        port: current.port,
-        name: current.name,
-        model: current.model,
-        account,
-        password,
-        otp: needOtp ? otp : undefined,
-        trustFingerprint,
-      }),
-    );
-    if (!outcome) return;
-    switch (outcome.status) {
-      case 'connected':
-        device = outcome.device;
-        await loadServices();
-        step = 'services';
-        break;
-      case 'otpRequired':
-        needOtp = true;
-        break;
-      case 'untrustedCertificate':
-      case 'certificateChanged':
-        certificate = {
-          fingerprint: outcome.fingerprint,
-          changed: outcome.status === 'certificateChanged',
-        };
-        break;
-      case 'notAllowed':
-        notAllowed = true;
-        sshOnly = true;
-        break;
-      case 'failed':
-        failure = { key: outcome.key, detail: outcome.detail };
-        break;
-    }
-  }
-
-  function trustCertificate() {
-    trustFingerprint = certificate?.fingerprint;
-    certificate = null;
-    void signIn();
+  async function signedIn(next: KnownDevice) {
+    device = next;
+    await loadServices();
+    step = 'services';
   }
 
   async function signInSshOnly(event: SubmitEvent) {
@@ -323,8 +233,6 @@
       if (result) showFolders(result);
       return;
     }
-    saved = await knownDevices().catch(() => []);
-    await search();
   });
 
   onDestroy(() => {
@@ -360,94 +268,13 @@
   </ol>
 
   {#if step === 'nas'}
-    {#if saved.length > 0}
-      <section class="card">
-        <h2>{t('add-saved')}</h2>
-        <ul class="list">
-          {#each saved as known (known.id)}
-            <li>
-              <Server size={22} strokeWidth={1.6} aria-hidden="true" />
-              <div class="device">
-                <strong>{known.name}</strong>
-                <span class="subtle"
-                  >{[known.model, `${known.host}:${known.port}`, known.account]
-                    .filter(Boolean)
-                    .join(' · ')}</span
-                >
-              </div>
-              <button
-                class="icon-button"
-                title={t('add-forget')}
-                aria-label={t('add-forget')}
-                onclick={() => forget(known.id)}
-              >
-                <Trash size={16} aria-hidden="true" />
-              </button>
-              <button class="button primary" onclick={() => choose(known)}>{t('add-choose')}</button
-              >
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/if}
-
-    <section class="card">
-      <div class="title-row">
-        <h2>{t('add-found')}</h2>
-        <button class="button small" onclick={search} disabled={searching}>
-          <span class:spin={searching}><RefreshCw size={14} aria-hidden="true" /></span>
-          {searching ? t('add-searching') : t('add-search-again')}
-        </button>
-      </div>
-      {#if unsaved.length > 0}
-        <ul class="list">
-          {#each unsaved as nas (nas.host)}
-            <li>
-              <Server size={22} strokeWidth={1.6} aria-hidden="true" />
-              <div class="device">
-                <strong>{nas.name}</strong>
-                <span class="subtle"
-                  >{[nas.model, nas.host, nas.dsm ? `DSM ${nas.dsm}` : null]
-                    .filter(Boolean)
-                    .join(' · ')}</span
-                >
-              </div>
-              <button class="button" onclick={() => choose(nas)}>{t('add-choose')}</button>
-            </li>
-          {/each}
-        </ul>
-      {:else if !searching && found.length === 0}
-        <p class="subtle">{t('add-none-found')}</p>
-      {/if}
-
-      <form class="manual" onsubmit={chooseAddress}>
-        <label for="address">{t('add-manual')}</label>
-        <div class="row">
-          <input
-            id="address"
-            class="input"
-            bind:value={address}
-            placeholder={t('add-manual-placeholder')}
-            autocomplete="off"
-            spellcheck="false"
-            aria-invalid={addressInvalid}
-          />
-          <button class="button" disabled={!address.trim()}>{t('add-choose')}</button>
-        </div>
-        {#if addressInvalid}<span class="invalid">{t('add-manual-invalid')}</span>{/if}
-      </form>
-    </section>
+    <NasPicker onchoose={choose} />
     {@render problem()}
     <div class="actions"><button class="button" onclick={cancel}>{t('add-cancel')}</button></div>
-  {:else if step === 'signin' && target}
+  {:else if step === 'signin' && target && sshOnly}
     <section class="card form" aria-busy={busy}>
       <header class="head">
-        <div class="icon" class:warning={certificate?.changed}>
-          {#if certificate?.changed}<ShieldAlert size={22} aria-hidden="true" />{:else}<KeyRound
-              size={22}
-              aria-hidden="true"
-            />{/if}
-        </div>
+        <div class="icon"><KeyRound size={22} aria-hidden="true" /></div>
         <div>
           <h2>{t('signin-title', { name: title })}</h2>
           <p class="subtle">
@@ -455,123 +282,68 @@
           </p>
         </div>
       </header>
-
-      {#if certificate}
-        <h3>{t(certificate.changed ? 'signin-cert-changed-title' : 'signin-cert-title')}</h3>
-        <p class="muted">
-          {t(certificate.changed ? 'signin-cert-changed-text' : 'signin-cert-text')}
-        </p>
-        <div class="fingerprint">
-          <span class="subtle">{t('signin-cert-fingerprint')}</span>
-          <code>{certificate.fingerprint}</code>
-        </div>
+      {#if notAllowed}<p class="hint-bar">{t('signin-not-allowed')}</p>{/if}
+      <p class="muted">{t('signin-ssh-only-text')}</p>
+      <form onsubmit={signInSshOnly}>
+        <label class="field">
+          <span>{t('signin-name')}</span>
+          <input class="input" bind:value={nasName} placeholder={target.name ?? target.host} />
+        </label>
+        <label class="field">
+          <span>{t('signin-ssh-port')}</span>
+          <input class="input narrow" type="number" min="1" max="65535" bind:value={sshPort} />
+        </label>
+        <label class="field">
+          <span>{t('signin-account')}</span>
+          <input
+            class="input"
+            bind:value={account}
+            autocomplete="username"
+            spellcheck="false"
+            required
+          />
+        </label>
+        <label class="field">
+          <span>{t('signin-password')}</span>
+          <input
+            class="input"
+            type="password"
+            bind:value={password}
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        {@render problem()}
         <div class="actions">
-          <button class="button" onclick={() => (certificate = null)}>{t('add-back')}</button>
-          <button
-            class="button {certificate.changed ? 'danger' : 'primary'}"
-            onclick={trustCertificate}
+          <button type="button" class="button" onclick={() => (sshOnly = false)}
+            >{t('add-back')}</button
           >
-            {t(certificate.changed ? 'signin-cert-trust-changed' : 'signin-cert-trust')}
-          </button>
+          <button class="button primary" disabled={busy}
+            >{busy ? t('signin-busy') : t('signin-continue')}</button
+          >
         </div>
-      {:else if sshOnly}
-        {#if notAllowed}<p class="hint-bar">{t('signin-not-allowed')}</p>{/if}
-        <p class="muted">{t('signin-ssh-only-text')}</p>
-        <form onsubmit={signInSshOnly}>
-          <label class="field">
-            <span>{t('signin-name')}</span>
-            <input class="input" bind:value={nasName} placeholder={target.name ?? target.host} />
-          </label>
-          <label class="field">
-            <span>{t('signin-ssh-port')}</span>
-            <input class="input narrow" type="number" min="1" max="65535" bind:value={sshPort} />
-          </label>
-          <label class="field">
-            <span>{t('signin-account')}</span>
-            <input
-              class="input"
-              bind:value={account}
-              autocomplete="username"
-              spellcheck="false"
-              required
-            />
-          </label>
-          <label class="field">
-            <span>{t('signin-password')}</span>
-            <input
-              class="input"
-              type="password"
-              bind:value={password}
-              autocomplete="current-password"
-              required
-            />
-          </label>
-          {@render problem()}
-          <div class="actions">
-            <button type="button" class="button" onclick={() => (sshOnly = false)}
-              >{t('add-back')}</button
-            >
-            <button class="button primary" disabled={busy}
-              >{busy ? t('signin-busy') : t('signin-continue')}</button
-            >
-          </div>
-        </form>
-      {:else}
-        <p class="muted">{t('signin-text')}</p>
-        <form onsubmit={signIn}>
-          {#if needOtp}
-            <h3>{t('signin-otp-title')}</h3>
-            <p class="muted">{t('signin-otp-text')}</p>
-            <label class="field">
-              <span>{t('signin-otp-code')}</span>
-              <input
-                class="input code"
-                bind:value={otp}
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                maxlength="8"
-                required
-              />
-            </label>
-          {:else}
-            <label class="field">
-              <span>{t('signin-account')}</span>
-              <input
-                class="input"
-                bind:value={account}
-                autocomplete="username"
-                spellcheck="false"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>{t('signin-password')}</span>
-              <input
-                class="input"
-                type="password"
-                bind:value={password}
-                autocomplete="current-password"
-                required
-              />
-            </label>
-          {/if}
-          {@render problem()}
-          <div class="actions spread">
-            <button type="button" class="button" onclick={() => (sshOnly = true)}
-              >{t('signin-ssh-only')}</button
-            >
-            <span class="actions">
-              <button type="button" class="button" onclick={() => (step = 'nas')}
-                >{t('add-back')}</button
-              >
-              <button class="button primary" disabled={busy}>
-                {busy ? t('signin-busy') : needOtp ? t('signin-otp-submit') : t('signin-submit')}
-              </button>
-            </span>
-          </div>
-        </form>
-      {/if}
+      </form>
     </section>
+  {:else if step === 'signin' && target}
+    <DsmSignIn
+      {target}
+      text={t('signin-text')}
+      signIn={connect}
+      bind:account
+      bind:password
+      onconnected={signedIn}
+      onnotallowed={() => {
+        notAllowed = true;
+        sshOnly = true;
+      }}
+      onback={() => (step = 'nas')}
+    >
+      {#snippet extra()}
+        <button type="button" class="button" onclick={() => (sshOnly = true)}>
+          {t('signin-ssh-only')}
+        </button>
+      {/snippet}
+    </DsmSignIn>
   {:else if step === 'services'}
     <section class="card form" aria-busy={busy}>
       <h2>{t('services-title', { name: title })}</h2>
@@ -691,7 +463,7 @@
               <input
                 class="input local"
                 bind:value={folders[share.name]}
-                aria-label={t('folders-local')}
+                aria-label={t(isWindows() ? 'folders-local-windows' : 'folders-local')}
                 spellcheck="false"
               />
             {/if}
@@ -702,10 +474,12 @@
         <input type="checkbox" bind:checked={atLogin} />
         {t('folders-at-login')}
       </label>
-      <label class="check-row">
-        <input type="checkbox" bind:checked={bookmark} />
-        {t('folders-bookmark')}
-      </label>
+      {#if !isWindows()}
+        <label class="check-row">
+          <input type="checkbox" bind:checked={bookmark} />
+          {t('folders-bookmark')}
+        </label>
+      {/if}
       {#if !fromMount}
         <label class="field">
           <span>{t('folders-internet')}</span>
@@ -840,13 +614,6 @@
     font-size: 1em;
   }
 
-  .title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
   .list {
     margin: 0;
     padding: 0;
@@ -865,7 +632,6 @@
     border-top: 1px solid var(--card-border);
   }
 
-  .device,
   .label {
     display: flex;
     flex: 1;
@@ -885,48 +651,8 @@
     min-width: 0;
   }
 
-  .icon-button {
-    display: grid;
-    place-items: center;
-    width: var(--control-height);
-    height: var(--control-height);
-    border: none;
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--text-3);
-    cursor: pointer;
-  }
-
-  .icon-button:hover {
-    background: var(--hover);
-    color: var(--danger);
-  }
-
-  .manual {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .row input {
-    flex: 1;
-    min-width: 0;
-  }
-
   .narrow {
     max-width: 8em;
-  }
-
-  .code {
-    max-width: 10em;
-    font-size: 1.3em;
-    letter-spacing: 0.2em;
-    font-variant-numeric: tabular-nums;
   }
 
   .invalid {
@@ -948,10 +674,6 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
-  }
-
-  .actions.spread {
-    justify-content: space-between;
   }
 
   .result {

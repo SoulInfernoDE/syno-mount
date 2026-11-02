@@ -48,3 +48,18 @@ Alle 5 Sekunden vergleicht der Agent die Zeit seit dem Start (`/proc/uptime`, z�
 ## Selbsttest
 
 In einem temporären Ordner im Mount: 1 MiB schreiben und lesen, `chmod 640`, Besitzer, `mtime`, über eine Datei umbenennen, Symlink anlegen und zurücklesen, harter Link, `user.*`-xattr, `flock` und eine dünn belegte 5-GiB-Datei. Sperren gelten immer als eingeschränkt, weil SFTP sie nicht weitergibt.
+
+## Adminbereich
+
+Eine eigene DSM-Anmeldung, die ein Administrator sein muss. Sie liest `SYNO.Core.User` (Konten), `SYNO.Core.Group.Member` (Mitglieder von „administrators“), `SYNO.Core.AppPriv.Rule` für die Anwendung `SYNO.SFTP` (die Regel für alle und Regeln pro Konto), `SYNO.Core.Share` und pro Freigabe `SYNO.Core.Share.Permission`. Änderungen werden in der Oberfläche gesammelt und erst gesendet, wenn der Nutzer die Liste bestätigt hat: Eine SFTP-Regel pro Konto wird gesetzt (`set`) oder entfernt (`delete`, zurück zur Regel für alle), und die eigenen Rechte der Konten auf eine Freigabe werden in einem `set`-Aufruf geschrieben. „Angepasste“ Rechte aus DSMs ACL-Editor werden gezeigt, aber nicht geändert.
+
+Die Anmeldung nutzt den Sitzungsnamen `FileStation`: DSM weist Konten außerhalb der Administratoren bei unbekannten Sitzungsnamen mit Fehler 402 ab, `FileStation` dagegen ist für jedes Konto offen und erlaubt trotzdem die Admin-APIs.
+
+## Windows
+
+Windows bindet mit [rclone](https://rclone.org) über [WinFsp](https://winfsp.dev) ein statt mit sshfs. SSHFS-Win wurde geprüft und verworfen: Die letzte Version stammt von 2021. Der Rest ist gemeinsam: Assistent, Schlüssel, festgehaltener Host-Key, Adminbereich, Selbsttest.
+
+- **Befehl:** `rclone mount :sftp,host=…,port=…,user=…,key_file=…,known_hosts_file=…,ciphers=…,shell_type=none,disable_hashcheck=true,set_modtime=true:/<freigabe> Z: --network-mode --vfs-cache-mode writes …`. Es wird keine rclone-Konfigurationsdatei geschrieben. rclone prüft Host-Keys nach Adresse, deshalb steht der festgehaltene Schlüssel zusätzlich unter `host` und `[host]:port` für LAN- und Internet-Adresse.
+- **Agent:** `syno-mount.exe agent` hält eine Sperrdatei, es läuft also einer pro Nutzer. Alle 2 Sekunden startet er für jeden Ordner, der eingebunden sein soll (eine `<id>.want`-Datei von der App oder „bei der Anmeldung einbinden“), ein rclone, startet eines neu, das beendet ist (nach 5 Sekunden) oder hängt (alle 30 Sekunden geprüft), wechselt zurück ins LAN, sobald es wieder antwortet, und beendet rclone für gestoppte oder entfernte Ordner. Die Meldungen von rclone landen in `<id>.log`; die App zeigt die letzten Zeilen, wenn ein Ordner scheitert.
+- **Autostart:** Solange ein Ordner bei der Anmeldung eingebunden werden soll, startet der Wert „Syno Mount“ in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` den Agenten.
+- **Selbsttest:** ohne Rechte, Besitzer, Links, xattr und die 5-GiB-Datei (rclone würde sie komplett hochladen).
