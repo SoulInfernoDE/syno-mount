@@ -10,7 +10,7 @@
 
 Gemacht für alle, denen SMB und WebDAV nicht reichen: Programme und Spiele, die auf Netzlaufwerken scheitern, weil Metadaten fehlen, und WebDAV, das bei großen Dateien aussteigt. Ein **Selbsttest** zeigt für jeden Ordner, was er kann, bevor du dich darauf verlässt.
 
-> **Stand: 0.6.** Linux ist mit Virtual DSM 7.2.2 getestet, mit einem Administrator- und einem normalen Konto, ebenso der Adminbereich. **Windows ist neu:** Einbinden, Agent und Selbsttest sind auf einer Windows-11-VM getestet; das Fenster selbst, Autostart und Standby noch nicht. Downloads: [Releases](https://github.com/SoulInfernoDE/syno-mount/releases). Siehe [Roadmap](ROADMAP.de.md).
+> **Stand: 0.7.** Linux ist mit Virtual DSM 7.2.2 getestet, mit einem Administrator- und einem normalen Konto, ebenso der Adminbereich und das Einbinden über einen Reverse-Proxy auf Port 443 (nginx). **Windows:** Einbinden, Agent und Selbsttest sind auf einer Windows-11-VM getestet; das Fenster selbst, Autostart und Standby noch nicht. Downloads: [Releases](https://github.com/SoulInfernoDE/syno-mount/releases). Siehe [Roadmap](ROADMAP.de.md).
 >
 > Syno Mount ist ein unabhängiges Community-Projekt. Es ist nicht mit Synology Inc. verbunden und wird von Synology weder unterstützt noch empfohlen. „Synology“ und „DSM“ sind Marken der Synology Inc.
 

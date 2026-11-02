@@ -10,7 +10,7 @@
 
 It is made for people who found SMB and WebDAV wanting: programs and games that fail on network drives because metadata is missing, WebDAV that drops large files. A **self-test** shows for every folder what it can do before you rely on it.
 
-> **Status: 0.6.** Linux is tested against Virtual DSM 7.2.2 with an administrator and a regular account; the administrator area as well. **Windows is new:** mounting, the agent and the self-test are tested on a Windows 11 VM; the window itself, autostart and suspend not yet. Downloads: [releases](https://github.com/SoulInfernoDE/syno-mount/releases). See the [roadmap](ROADMAP.md).
+> **Status: 0.7.** Linux is tested against Virtual DSM 7.2.2 with an administrator and a regular account; the administrator area as well, and mounting through a reverse proxy on port 443 (nginx). **Windows:** mounting, the agent and the self-test are tested on a Windows 11 VM; the window itself, autostart and suspend not yet. Downloads: [releases](https://github.com/SoulInfernoDE/syno-mount/releases). See the [roadmap](ROADMAP.md).
 >
 > Syno Mount is an independent community project. It is not affiliated with, endorsed by or supported by Synology Inc. "Synology" and "DSM" are trademarks of Synology Inc.
 

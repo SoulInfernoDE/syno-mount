@@ -4889,7 +4889,7 @@ dependencies = [
 
 [[package]]
 name = "syno-discovery"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "mdns-sd",
  "serde",
@@ -4898,7 +4898,7 @@ dependencies = [
 
 [[package]]
 name = "syno-dsm"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "rcgen",
  "reqwest",
@@ -4916,7 +4916,7 @@ dependencies = [
 
 [[package]]
 name = "syno-mount"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4930,7 +4930,7 @@ dependencies = [
 
 [[package]]
 name = "syno-mount-app"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4946,7 +4946,7 @@ dependencies = [
 
 [[package]]
 name = "syno-ssh"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "getrandom 0.3.4",
  "russh",
