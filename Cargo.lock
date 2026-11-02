@@ -4947,6 +4947,7 @@ dependencies = [
 name = "syno-ssh"
 version = "0.6.0"
 dependencies = [
+ "getrandom 0.3.4",
  "russh",
  "russh-sftp",
  "serde",

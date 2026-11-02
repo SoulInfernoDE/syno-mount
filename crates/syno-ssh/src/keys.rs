@@ -1,7 +1,7 @@
 //! The app's own key files and `known_hosts`.
 
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -31,8 +31,10 @@ impl KeyPair {
                 key,
             });
         }
+        // The operating system's random source (getrandom on Linux, the system
+        // RNG on Windows).
         let mut seed = [0u8; 32];
-        fs::File::open("/dev/urandom")?.read_exact(&mut seed)?;
+        getrandom::fill(&mut seed).map_err(|error| Error::Io(error.to_string()))?;
         let mut key = PrivateKey::from(Ed25519Keypair::from_seed(&seed));
         key.set_comment(comment);
         let pem = key
