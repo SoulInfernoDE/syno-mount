@@ -6,7 +6,8 @@
   import Sidebar from './components/Sidebar.svelte';
   import SystemPanel from './components/SystemPanel.svelte';
   import type { Section } from './lib/nav';
-  import { persistAndApply } from './lib/settings.svelte';
+  import { onMount } from 'svelte';
+  import { applyBackdrop, persistAndApply } from './lib/settings.svelte';
 
   let section = $state<Section>('mounts');
   /** Opens the assistant with the folders of the NAS this mount belongs to. */
@@ -16,6 +17,7 @@
 
   // Reads every setting, so it re-runs whenever one changes.
   $effect(persistAndApply);
+  onMount(() => void applyBackdrop());
 
   function add(mount?: string) {
     fromMount = mount;

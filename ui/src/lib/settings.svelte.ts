@@ -1,6 +1,7 @@
 // User preferences of the interface: skin, color scheme, language, expert mode.
 // Kept in the WebView's local storage until the Rust core gets a settings store.
 
+import { backdrop, hasCore, setWindowTheme } from './backend';
 import { applyLanguage } from './i18n.svelte';
 
 export type Skin = 'linux' | 'macos' | 'windows';
@@ -51,6 +52,15 @@ export function activeScheme(): 'light' | 'dark' {
   return systemDark ? 'dark' : 'light';
 }
 
+let windowDark: boolean | null = null;
+
+/** Asks the core once whether the window has a backdrop such as Mica to let through. */
+export async function applyBackdrop(): Promise<void> {
+  if (!hasCore()) return;
+  const kind = await backdrop().catch(() => null);
+  if (kind) document.documentElement.dataset.backdrop = kind;
+}
+
 /** Writes the settings and applies skin, scheme and language to the document. */
 export function persistAndApply(): void {
   try {
@@ -61,5 +71,11 @@ export function persistAndApply(): void {
   const root = document.documentElement;
   root.dataset.skin = activeSkin();
   root.dataset.scheme = activeScheme();
+  // The window's own parts (title bar, Mica) follow the app's light or dark.
+  const dark = activeScheme() === 'dark';
+  if (hasCore() && dark !== windowDark) {
+    windowDark = dark;
+    void setWindowTheme(dark).catch(() => undefined);
+  }
   applyLanguage(settings.language);
 }

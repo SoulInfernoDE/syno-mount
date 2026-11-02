@@ -245,6 +245,10 @@ export const speedTest = (id: string, megabytes?: number) =>
   invoke<Speed>('speed_test', { id, megabytes });
 export const openFolder = (id: string) => invoke<void>('open_folder', { id });
 export const commandLine = (id: string) => invoke<string>('command_line', { id });
+
+/** "mica" when Windows 11 shows Mica behind the window. */
+export const backdrop = () => invoke<string | null>('backdrop');
+export const setWindowTheme = (dark: boolean) => invoke<void>('set_window_theme', { dark });
 export const checkAddress = (id: string, address: Address) =>
   invoke<AddressCheck>('check_address', { id, address });
 

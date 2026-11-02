@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod admin;
+mod backdrop;
 mod devices;
 mod failure;
 mod mounts;
@@ -97,6 +98,9 @@ fn main() -> ExitCode {
         }))
         .setup(|app| {
             app.manage(state::AppState::new(Paths::from_env()));
+            if let Some(window) = app.get_webview_window("main") {
+                backdrop::apply(&window);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -130,6 +134,8 @@ fn main() -> ExitCode {
             admin::admin_apply,
             admin::admin_enable_services,
             admin::admin_disconnect,
+            backdrop::backdrop,
+            backdrop::set_window_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Syno Mount");

@@ -429,6 +429,10 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
     }
     return { latencyMs: address.tunnel ? 38.4 : 21.7 };
   },
+  // `&backdrop=mica` previews the Windows 11 window background.
+  backdrop: async () =>
+    new URLSearchParams(location.search).get('backdrop') === 'mica' ? 'mica' : null,
+  set_window_theme: async () => undefined,
   command_line: async (args) => {
     const mount = find(args.id).mount;
     return `sshfs -f -o Port=22 -o IdentityFile=${mount.keyPath} -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/anna/.local/share/syno-mount/known_hosts -o HostKeyAlias=${mount.hostKeyAlias} -o StrictHostKeyChecking=yes -o BatchMode=yes -o reconnect -o ServerAliveInterval=15 -o max_conns=4 -o idmap=file ${mount.account}@${mount.lan.host}:${mount.remotePath} ${mount.localPath}`;
