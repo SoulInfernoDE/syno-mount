@@ -159,7 +159,8 @@ pub fn display(arguments: &[String]) -> String {
         .join(" ")
 }
 
-#[cfg(test)]
+// sshfs runs on Linux only; Windows paths would be quoted differently.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::config::tests::sample;

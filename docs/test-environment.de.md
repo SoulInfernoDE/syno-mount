@@ -25,7 +25,7 @@ Auf der VM: eine Freigabe `mounttest`, ein Konto mit Lese- und Schreibrecht dara
 
 ```bash
 set -a; . ./.env.vdsm; set +a
-cargo run -p syno-ssh --example vdsm      # Schlüssel installieren, damit anmelden, entfernen
+cargo run -p syno-ssh --example vdsm-key      # Schlüssel installieren, damit anmelden, entfernen
 cargo run -p syno-mount --example vdsm    # + DSM, Freigaben, sshfs, Selbsttest, Geschwindigkeit
 ```
 
@@ -55,3 +55,17 @@ Beide laufen in temporären Ordnern und entfernen den Schlüssel am Ende vom NAS
 | NAS wieder da           | 18 s nach dem Start der VM wieder eingebunden, ohne Zutun                                              |
 
 Noch nicht getestet: Standby und Aufwachen eines echten Computers und ein echter Netzwechsel.
+
+## Windows
+
+Getestet auf einer Windows-11-VM (Build 26200) mit WinFsp und rclone v1.75.2 aus winget und dem Installer aus dem Release-Workflow (`-setup.exe /S`). Die VM erreicht das Virtual DSM über einen SSH-Rücktunnel (`ssh -R 25022:127.0.0.1:25022 <vm>`), am Netzwerk ändert sich also nichts. Ordnerliste, Schlüssel und `known_hosts` wurden so geschrieben, wie die App sie schreibt; `syno-mount.exe status` und `syno-mount.exe selftest <id>` lesen das Ergebnis ohne Fenster.
+
+| Test                                 | Ergebnis                                                                                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent gestartet, Ordner gewünscht    | `Z:` nach 3 s, Weg LAN, Latenz 1,4 ms                                                                                                                     |
+| Selbsttest                           | Schreiben und Lesen, Zeiten, Umbenennen über eine Datei funktionieren; Sperren nur auf diesem Computer                                                    |
+| 32 MiB geschrieben und zurückgelesen | identisch                                                                                                                                                 |
+| Ordner gestoppt                      | `Z:` nach 1 s weg                                                                                                                                         |
+| Gefunden und behoben                 | DSM bietet mehrere Host-Key-Typen an und rclone nahm einen anderen („key mismatch“); der festgehaltene Typ wird jetzt als `host_key_algorithms` übergeben |
+
+Unter Windows noch nicht getestet: Assistent und Adminbereich im Fenster, Autostart bei der Anmeldung, Standby und Netzwechsel.

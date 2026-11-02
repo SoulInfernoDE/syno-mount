@@ -85,7 +85,8 @@ Tested since (details in [test environment](docs/test-environment.md)): DSM 7 pu
 - [x] Sign-in with the session name `FileStation`, so accounts outside the administrators get in (the custom name was refused with error 402; Syno Companion has the same problem)
 - [x] Windows backend: rclone through WinFsp, network drives from `Z:` down, agent with autostart, rclone command shown in the app
 - [x] Windows installers (`-setup.exe`, `.msi`) in the release workflow; Windows in CI
-- [ ] Windows tested on a real Windows computer against the test VM
+- [x] Windows tested on a Windows 11 VM against the test VM: mount, agent, self-test, stop (see [test environment](docs/test-environment.md#windows))
+- [ ] Windows: assistant and administrator area in the window, autostart at sign-in, suspend
 - [ ] Windows: install WinFsp and rclone from the app (winget)
 
 ## Later

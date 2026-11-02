@@ -2,7 +2,7 @@
 //!
 //! ```sh
 //! set -a; . ./.env.vdsm; set +a
-//! cargo run -p syno-ssh --example vdsm
+//! cargo run -p syno-ssh --example vdsm-key
 //! ```
 
 use syno_ssh::{KeyPair, Login, Target, connect, scan_host_key};

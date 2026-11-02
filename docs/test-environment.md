@@ -25,7 +25,7 @@ On the VM: a shared folder `mounttest`, an account with read/write access to it,
 
 ```bash
 set -a; . ./.env.vdsm; set +a
-cargo run -p syno-ssh --example vdsm      # key install, key login, key removal
+cargo run -p syno-ssh --example vdsm-key      # key install, key login, key removal
 cargo run -p syno-mount --example vdsm    # + DSM, shares, sshfs, self-test, speed test
 ```
 
@@ -55,3 +55,17 @@ Both run in temporary folders and remove the key from the NAS at the end. The `s
 | NAS back            | mounted again 18 s after the VM started, without any action                                          |
 
 Not tested yet: suspend and resume of a real computer, and a real network change.
+
+## Windows
+
+Tested on a Windows 11 VM (build 26200) with WinFsp and rclone v1.75.2 from winget and the installer built by the release workflow (`-setup.exe /S`). The VM reaches the Virtual DSM through an SSH reverse tunnel (`ssh -R 25022:127.0.0.1:25022 <vm>`), so nothing on the network changes. The folder list, key and `known_hosts` were written as the app writes them; `syno-mount.exe status` and `syno-mount.exe selftest <id>` read the result without a window.
+
+| Test                         | Result                                                                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent started, folder wanted | `Z:` after 3 s, route LAN, latency 1.4 ms                                                                                              |
+| Self-test                    | write and read, times, rename over a file work; locks only on this computer                                                            |
+| 32 MiB written and read back | identical                                                                                                                              |
+| Folder stopped               | `Z:` gone after 1 s                                                                                                                    |
+| Found and fixed              | DSM offers several host key types and rclone took another one ("key mismatch"); the pinned type is now passed as `host_key_algorithms` |
+
+Not tested yet on Windows: the assistant and the administrator area in the window, autostart at sign-in, suspend and network changes.

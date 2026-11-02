@@ -85,7 +85,8 @@ Inzwischen getestet (Details in der [Testumgebung](docs/test-environment.de.md))
 - [x] Anmeldung mit dem Sitzungsnamen `FileStation`, damit Konten außerhalb der Administratoren hereinkommen (der eigene Name wurde mit Fehler 402 abgewiesen; Syno Companion hat dasselbe Problem)
 - [x] Windows-Backend: rclone über WinFsp, Netzlaufwerke ab `Z:` abwärts, Agent mit Autostart, rclone-Befehl in der App sichtbar
 - [x] Windows-Installer (`-setup.exe`, `.msi`) im Release-Workflow; Windows in der CI
-- [ ] Windows auf einem echten Windows-Rechner gegen die Test-VM getestet
+- [x] Windows auf einer Windows-11-VM gegen die Test-VM getestet: Einbinden, Agent, Selbsttest, Stoppen (siehe [Testumgebung](docs/test-environment.de.md#windows))
+- [ ] Windows: Assistent und Adminbereich im Fenster, Autostart bei der Anmeldung, Standby
 - [ ] Windows: WinFsp und rclone aus der App installieren (winget)
 
 ## Später
