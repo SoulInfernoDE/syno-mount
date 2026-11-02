@@ -26,8 +26,8 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
 - **Creates an ed25519 key** for this computer and installs it on the NAS over SFTP, with the permissions sshd insists on. No password is stored, neither DSM's nor the SSH one.
 - **Mounts each folder** at login if you like, with keep-alives, the fastest cipher for the NAS's processor and parallel connections. On **Linux** as a folder through `sshfs`, one systemd user service each, and your own files show as yours (owner mapping). On **Windows** as a network drive or folder through `rclone`.
 - **Keeps folders mounted:** a small agent notices suspend and network changes, releases hanging mounts and mounts again, and switches between the LAN and the internet address.
-- **Self-test and speed test** per folder, a status page with route and latency, the exact `sshfs` or `rclone` command to read, and **undo** of everything, including the key on the NAS.
-- **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. Nothing changes in DSM before you confirm the list of changes.
+- **Self-test and speed test** per folder, a status page with route, latency and whether the name of the NAS is looked up with encrypted DNS, the exact `sshfs` or `rclone` command to read, and **undo** of everything, including the key on the NAS.
+- **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. A view by account sets one account's access to every folder and previews what it will see over SFTP, group permissions included. Nothing changes in DSM before you confirm the list of changes.
 
 <p align="center">
   <img src="docs/images/admin.en.png" alt="The administrator area: accounts with their SFTP privilege and access to the shared folder Games, and whether each is ready for Syno Mount" width="760">

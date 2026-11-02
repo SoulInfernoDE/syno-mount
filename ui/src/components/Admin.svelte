@@ -2,20 +2,27 @@
   import { onDestroy } from 'svelte';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import CircleX from '@lucide/svelte/icons/circle-x';
+  import Eye from '@lucide/svelte/icons/eye';
+  import FolderLock from '@lucide/svelte/icons/folder-lock';
+  import FolderOpen from '@lucide/svelte/icons/folder-open';
+  import FolderPen from '@lucide/svelte/icons/folder-pen';
   import LogOut from '@lucide/svelte/icons/log-out';
   import Dialog from './Dialog.svelte';
   import DsmSignIn from './DsmSignIn.svelte';
   import NasPicker from './NasPicker.svelte';
   import {
+    adminAccountAccess,
     adminApply,
     adminConnect,
     adminDisconnect,
     adminEnableServices,
     adminOverview,
     adminShareAccess,
+    effectivePermission,
     toFailure,
     type Access,
     type Account,
+    type AccountShare,
     type AdminChanges,
     type AdminOverview,
     type Failure,
@@ -31,6 +38,10 @@
   let overview = $state<AdminOverview | null>(null);
   let share = $state('');
   let access = $state<ShareAccess[]>([]);
+  /** By shared folder: every account on one folder; by account: one account on every folder. */
+  let view = $state<'share' | 'account'>('share');
+  let account = $state('');
+  let accountShares = $state<AccountShare[]>([]);
   let busy = $state(false);
   let failure = $state<Failure | null>(null);
 
@@ -61,7 +72,20 @@
     if (!next) return;
     overview = next;
     if (!next.shares.some((entry) => entry.name === share)) share = next.shares[0]?.name ?? '';
+    if (!next.accounts.some((entry) => entry.name === account)) {
+      account = next.accounts.find((entry) => !entry.admin)?.name ?? next.accounts[0]?.name ?? '';
+    }
     await loadAccess();
+    await loadAccount();
+  }
+
+  async function loadAccount() {
+    if (!account) {
+      accountShares = [];
+      return;
+    }
+    const current = account;
+    accountShares = (await run(() => adminAccountAccess(current))) ?? [];
   }
 
   async function loadAccess() {
@@ -124,12 +148,40 @@
     return shareEdits[share]?.[name] ?? permissionOf(name);
   }
 
-  function setPermission(name: string, permission: Permission) {
-    const edits = { ...(shareEdits[share] ?? {}) };
-    if (permission === permissionOf(name)) delete edits[name];
+  /** Notes an edit of `name` on `folder`; going back to `saved` drops it. */
+  function edit(folder: string, name: string, permission: Permission, saved: Permission) {
+    const edits = { ...(shareEdits[folder] ?? {}) };
+    if (permission === saved) delete edits[name];
     else edits[name] = permission;
-    shareEdits[share] = edits;
+    shareEdits[folder] = edits;
   }
+
+  function setPermission(name: string, permission: Permission) {
+    edit(share, name, permission, permissionOf(name));
+  }
+
+  // By account: the selected account's own permission per folder, with edits.
+  function ownChoice(entry: AccountShare): Permission {
+    return shareEdits[entry.share]?.[account] ?? entry.own;
+  }
+
+  const selected = $derived(overview?.accounts.find((entry) => entry.name === account));
+  /** What the account reaches over SFTP, with the edits not yet applied. */
+  const preview = $derived(
+    accountShares.map((entry) => ({
+      ...entry,
+      result: effectivePermission(ownChoice(entry), entry.groups),
+    })),
+  );
+  const visible = $derived(
+    preview.filter(
+      (entry) =>
+        entry.result === 'readOnly' || entry.result === 'readWrite' || entry.result === 'custom',
+    ),
+  );
+  const hidden = $derived(
+    preview.filter((entry) => entry.result === 'none' || entry.result === 'deny'),
+  );
 
   function isAdmin(name: string): boolean {
     return access.find((entry) => entry.account === name)?.admin ?? false;
@@ -243,89 +295,219 @@
     <section class="card">
       <div class="title-row">
         <h2>{t('admin-accounts')}</h2>
+        <div class="segmented" role="group" aria-label={t('admin-view')}>
+          <button
+            class="button small"
+            aria-pressed={view === 'share'}
+            onclick={() => (view = 'share')}>{t('admin-view-share')}</button
+          >
+          <button
+            class="button small"
+            aria-pressed={view === 'account'}
+            onclick={() => (view = 'account')}>{t('admin-view-account')}</button
+          >
+        </div>
+      </div>
+
+      {#if view === 'share'}
+        <div class="title-row">
+          <label class="share-picker">
+            <span class="subtle">{t('admin-share')}</span>
+            <select class="select" bind:value={share} onchange={loadAccess}>
+              {#each overview.shares as entry (entry.name)}
+                <option value={entry.name}>{entry.name}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+        {#if shareInfo?.acl}
+          <p class="subtle">{t('admin-share-acl')}</p>
+        {/if}
+
+        <div class="table" role="table" aria-label={t('admin-accounts')}>
+          <div class="row head" role="row">
+            <span role="columnheader">{t('admin-account')}</span>
+            <span role="columnheader">{t('admin-sftp')}</span>
+            <span role="columnheader">{t('admin-permission', { share })}</span>
+            <span role="columnheader">{t('admin-ready')}</span>
+          </div>
+          {#each overview.accounts as account (account.name)}
+            <div class="row" role="row" class:disabled={account.disabled}>
+              <span role="cell" class="who">
+                <strong>{account.name}</strong>
+                <span class="badges">
+                  {#if account.admin}<span class="badge">{t('admin-badge-admin')}</span>{/if}
+                  {#if account.disabled}<span class="badge danger">{t('admin-badge-disabled')}</span
+                    >{/if}
+                </span>
+                {#if account.description}<span class="subtle">{account.description}</span>{/if}
+              </span>
+              <span role="cell">
+                <select
+                  class="select"
+                  value={sftpChoice(account)}
+                  aria-label={t('admin-sftp')}
+                  onchange={(event) =>
+                    setSftp(
+                      account,
+                      (event.currentTarget as HTMLSelectElement).value as SftpChoice,
+                    )}
+                >
+                  <option value="default">{t('admin-sftp-default')}</option>
+                  <option value="allowed">{t('admin-sftp-allowed')}</option>
+                  <option value="denied">{t('admin-sftp-denied')}</option>
+                </select>
+              </span>
+              <span role="cell">
+                {#if permissionOf(account.name) === 'custom'}
+                  <span class="subtle">{t('admin-permission-custom')}</span>
+                {:else}
+                  <select
+                    class="select"
+                    aria-label={t('admin-permission', { share })}
+                    onchange={(event) =>
+                      setPermission(
+                        account.name,
+                        (event.currentTarget as HTMLSelectElement).value as Permission,
+                      )}
+                  >
+                    {#each permissions as permission (permission)}
+                      <option
+                        value={permission}
+                        selected={permission === permissionChoice(account.name)}
+                      >
+                        {t(
+                          permission === 'none' && isAdmin(account.name)
+                            ? 'admin-permission-via-admins'
+                            : `admin-permission-${permission}`,
+                        )}
+                      </option>
+                    {/each}
+                  </select>
+                {/if}
+              </span>
+              <span role="cell">
+                {#if ready(account)}
+                  <span class="badge success">{t('admin-ready-yes')}</span>
+                {:else}
+                  <span class="badge">{t('admin-ready-no')}</span>
+                {/if}
+              </span>
+            </div>
+          {/each}
+        </div>
+        <p class="subtle">{t('admin-note')}</p>
+      {:else}
         <label class="share-picker">
-          <span class="subtle">{t('admin-share')}</span>
-          <select class="select" bind:value={share} onchange={loadAccess}>
-            {#each overview.shares as entry (entry.name)}
+          <span class="subtle">{t('admin-account')}</span>
+          <select class="select" bind:value={account} onchange={loadAccount}>
+            {#each overview.accounts as entry (entry.name)}
               <option value={entry.name}>{entry.name}</option>
             {/each}
           </select>
         </label>
-      </div>
-      {#if shareInfo?.acl}
-        <p class="subtle">{t('admin-share-acl')}</p>
-      {/if}
 
-      <div class="table" role="table" aria-label={t('admin-accounts')}>
-        <div class="row head" role="row">
-          <span role="columnheader">{t('admin-account')}</span>
-          <span role="columnheader">{t('admin-sftp')}</span>
-          <span role="columnheader">{t('admin-permission', { share })}</span>
-          <span role="columnheader">{t('admin-ready')}</span>
-        </div>
-        {#each overview.accounts as account (account.name)}
-          <div class="row" role="row" class:disabled={account.disabled}>
-            <span role="cell" class="who">
-              <strong>{account.name}</strong>
-              <span class="badges">
-                {#if account.admin}<span class="badge">{t('admin-badge-admin')}</span>{/if}
-                {#if account.disabled}<span class="badge danger">{t('admin-badge-disabled')}</span
-                  >{/if}
-              </span>
-              {#if account.description}<span class="subtle">{account.description}</span>{/if}
-            </span>
-            <span role="cell">
-              <select
-                class="select"
-                value={sftpChoice(account)}
-                aria-label={t('admin-sftp')}
-                onchange={(event) =>
-                  setSftp(account, (event.currentTarget as HTMLSelectElement).value as SftpChoice)}
-              >
-                <option value="default">{t('admin-sftp-default')}</option>
-                <option value="allowed">{t('admin-sftp-allowed')}</option>
-                <option value="denied">{t('admin-sftp-denied')}</option>
-              </select>
-            </span>
-            <span role="cell">
-              {#if permissionOf(account.name) === 'custom'}
-                <span class="subtle">{t('admin-permission-custom')}</span>
-              {:else}
-                <select
-                  class="select"
-                  aria-label={t('admin-permission', { share })}
-                  onchange={(event) =>
-                    setPermission(
-                      account.name,
-                      (event.currentTarget as HTMLSelectElement).value as Permission,
-                    )}
-                >
-                  {#each permissions as permission (permission)}
-                    <option
-                      value={permission}
-                      selected={permission === permissionChoice(account.name)}
-                    >
-                      {t(
-                        permission === 'none' && isAdmin(account.name)
-                          ? 'admin-permission-via-admins'
-                          : `admin-permission-${permission}`,
-                      )}
-                    </option>
-                  {/each}
-                </select>
-              {/if}
-            </span>
-            <span role="cell">
-              {#if ready(account)}
-                <span class="badge success">{t('admin-ready-yes')}</span>
-              {:else}
-                <span class="badge">{t('admin-ready-no')}</span>
-              {/if}
-            </span>
+        <div class="table" role="table" aria-label={t('admin-view-account')}>
+          <div class="row head" role="row">
+            <span role="columnheader">{t('admin-share')}</span>
+            <span role="columnheader">{t('admin-own')}</span>
+            <span role="columnheader">{t('admin-groups')}</span>
+            <span role="columnheader">{t('admin-result')}</span>
           </div>
-        {/each}
-      </div>
-      <p class="subtle">{t('admin-note')}</p>
+          {#each preview as entry (entry.share)}
+            <div class="row" role="row">
+              <span role="cell" class="who">
+                <strong>{entry.share}</strong>
+                {#if entry.acl}<span class="subtle">{t('admin-acl-short')}</span>{/if}
+              </span>
+              <span role="cell">
+                {#if entry.own === 'custom'}
+                  <span class="subtle">{t('admin-permission-custom')}</span>
+                {:else}
+                  <select
+                    class="select"
+                    aria-label={t('admin-own')}
+                    onchange={(event) =>
+                      edit(
+                        entry.share,
+                        account,
+                        (event.currentTarget as HTMLSelectElement).value as Permission,
+                        entry.own,
+                      )}
+                  >
+                    {#each permissions as permission (permission)}
+                      <option value={permission} selected={permission === ownChoice(entry)}>
+                        {t(`admin-permission-${permission}`)}
+                      </option>
+                    {/each}
+                  </select>
+                {/if}
+              </span>
+              <span role="cell" class="subtle">{t(`admin-groups-${entry.groups}`)}</span>
+              <span role="cell">
+                <span
+                  class="badge {entry.result === 'readWrite' || entry.result === 'readOnly'
+                    ? 'success'
+                    : entry.result === 'deny'
+                      ? 'danger'
+                      : ''}">{t(`admin-result-${entry.result}`)}</span
+                >
+              </span>
+            </div>
+          {/each}
+        </div>
+        <p class="subtle">{t('admin-groups-note')}</p>
+
+        {#if selected}
+          <div class="preview">
+            <h3>
+              <Eye size={16} aria-hidden="true" />
+              {t('admin-preview-title', { account: selected.name })}
+            </h3>
+            {#if selected.disabled}
+              <p class="muted">{t('admin-preview-disabled')}</p>
+            {:else if sftpEffective(selected) !== 'allowed'}
+              <p class="muted">{t('admin-preview-no-sftp')}</p>
+            {:else}
+              <p class="subtle">{t('admin-preview-text')}</p>
+              <ul class="tree">
+                {#if overview.services.home}
+                  <li>
+                    <FolderPen size={16} aria-hidden="true" />
+                    <code>/home</code>
+                    <span class="subtle">{t('admin-preview-home')}</span>
+                  </li>
+                {/if}
+                {#each visible as entry (entry.share)}
+                  <li>
+                    {#if entry.result === 'readOnly'}
+                      <FolderLock size={16} aria-hidden="true" />
+                    {:else}
+                      <FolderOpen size={16} aria-hidden="true" />
+                    {/if}
+                    <code>/{entry.share}</code>
+                    <span class="subtle"
+                      >{t(`admin-result-${entry.result}`)}{entry.acl
+                        ? ` · ${t('admin-preview-acl')}`
+                        : ''}</span
+                    >
+                  </li>
+                {/each}
+              </ul>
+              {#if visible.length === 0 && !overview.services.home}
+                <p class="muted">{t('admin-preview-empty')}</p>
+              {/if}
+              {#if hidden.length > 0}
+                <p class="subtle">
+                  {t('admin-preview-hidden', {
+                    names: hidden.map((entry) => entry.share).join(', '),
+                  })}
+                </p>
+              {/if}
+            {/if}
+          </div>
+        {/if}
+      {/if}
 
       {#if failure}
         <p class="failure" role="alert">
@@ -421,6 +603,49 @@
 
   .services :global(.bad) {
     color: var(--danger);
+  }
+
+  .segmented {
+    display: inline-flex;
+    gap: 4px;
+  }
+
+  .segmented .button[aria-pressed='true'] {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-control);
+    background: var(--track);
+  }
+
+  .preview h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 1em;
+  }
+
+  .tree {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tree li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
 
   .share-picker {

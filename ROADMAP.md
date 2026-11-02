@@ -92,6 +92,9 @@ Tested since (details in [test environment](docs/test-environment.md)): DSM 7 pu
 ## v0.7 – Behind a reverse proxy
 
 - [x] HTTPS tunnel, phase 1 (Linux): SSH inside TLS to a reverse proxy on port 443, routed by ALPN or name; certificate checked against the system or pinned; "Check connection" with the pinned host key; tested against nginx in front of Virtual DSM ([design](docs/https-tunnel.md))
+- [x] Encrypted DNS shown per folder: DNS over TLS (systemd-resolved) or HTTPS (Windows), opportunistic, local resolver, plain, or no query at all
+- [x] Administrator area by account: one account's access to every folder, with its group permissions and a preview of what it sees over SFTP
+- [ ] Encrypted DNS on Windows tested with DNS over HTTPS switched on (so far only the plain case)
 - [ ] Phase 2: Windows, through a local forwarder for rclone
 - [ ] Phase 3: device certificates (mTLS), so that only known computers reach SSH at all
 - [ ] Phase 4: proxy configuration to copy, for nginx, Traefik and HAProxy

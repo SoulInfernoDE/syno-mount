@@ -126,6 +126,7 @@ fn main() -> ExitCode {
             admin::admin_connect,
             admin::admin_overview,
             admin::admin_share_access,
+            admin::admin_account_access,
             admin::admin_apply,
             admin::admin_enable_services,
             admin::admin_disconnect,

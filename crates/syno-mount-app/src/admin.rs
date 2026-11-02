@@ -2,7 +2,9 @@
 //! they may open. Signs in separately from the assistant and needs an administrator.
 
 use serde::{Deserialize, Serialize};
-use syno_dsm::{Access, Account, AdminShare, Client, Permission, Services, Session, ShareAccess};
+use syno_dsm::{
+    Access, Account, AccountShare, AdminShare, Client, Permission, Services, Session, ShareAccess,
+};
 use tauri::State;
 
 use crate::devices::KnownDevice;
@@ -75,6 +77,23 @@ pub async fn admin_share_access(
         .as_ref()
         .ok_or_else(|| Failure::new("not-connected", None))?;
     Ok(admin.client.share_access(&admin.session, &share).await?)
+}
+
+/// One account's permissions on every shared folder, for the view by account and
+/// its preview of what the account sees.
+#[tauri::command]
+pub async fn admin_account_access(
+    account: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<AccountShare>, Failure> {
+    let admin = state.admin.lock().await;
+    let admin = admin
+        .as_ref()
+        .ok_or_else(|| Failure::new("not-connected", None))?;
+    Ok(admin
+        .client
+        .account_access(&admin.session, &account)
+        .await?)
 }
 
 #[derive(Debug, Deserialize)]

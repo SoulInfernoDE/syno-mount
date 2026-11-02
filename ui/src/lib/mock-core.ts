@@ -79,6 +79,7 @@ let views: MountView[] = empty
             since: 1_793_000_000,
           },
           latencyMs: 0.6,
+          dns: { kind: 'noQuery' },
         },
       },
       {
@@ -108,6 +109,7 @@ let views: MountView[] = empty
             since: 1_793_000_000,
           },
           latencyMs: 23,
+          dns: { kind: 'encrypted', protocol: 'tls' },
         },
       },
     ];
@@ -392,6 +394,18 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
     };
   },
   admin_share_access: async (args) => structuredClone(adminAccess[args.share as string] ?? []),
+  admin_account_access: async (args) => {
+    const account = adminAccounts.find((entry) => entry.name === args.account);
+    return adminShares.map((share) => ({
+      share: share.name,
+      acl: share.acl,
+      own:
+        adminAccess[share.name]?.find((entry) => entry.account === args.account)?.permission ??
+        'none',
+      // Administrators get everything through their group; "users" may read Media.
+      groups: account?.admin ? 'readWrite' : share.name === 'Media' ? 'readOnly' : 'none',
+    }));
+  },
   admin_apply: async (args) => {
     await wait(600);
     applyAdmin(args.changes as AdminChanges);

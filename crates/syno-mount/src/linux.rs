@@ -164,6 +164,9 @@ pub fn status(paths: &Paths, mount: &Mount) -> MountStatus {
     let connected = matches!(state, State::Mounted | State::Stale)
         .then(|| status::connected(paths, &mount.id))
         .flatten();
+    let dns = connected
+        .as_ref()
+        .map(|note| crate::dns::resolution(&note.address.host));
     let latency_ms = connected.as_ref().and_then(|note| {
         status::reach(&note.address, PROBE_TIMEOUT).map(|time| time.as_secs_f64() * 1000.0)
     });
@@ -175,6 +178,7 @@ pub fn status(paths: &Paths, mount: &Mount) -> MountStatus {
         state,
         connected,
         latency_ms,
+        dns,
         log,
     }
 }

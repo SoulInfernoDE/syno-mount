@@ -74,6 +74,19 @@ pub struct ShareAccess {
     pub admin: bool,
 }
 
+/// What an account gets on one shared folder: its own permission and what its
+/// groups (and the folder's ACL) give it. DSM applies both: a denial wins, then the
+/// wider of the two.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountShare {
+    pub share: String,
+    /// Windows ACL mode: DSM ignores chmod inside.
+    pub acl: bool,
+    pub own: Permission,
+    pub groups: Permission,
+}
+
 fn flag(item: &Value, key: &str) -> bool {
     item[key].as_bool().unwrap_or(false)
 }
@@ -174,6 +187,34 @@ pub(crate) fn shares_from_api(data: &Value) -> Vec<AdminShare> {
     shares
 }
 
+/// DSM's `inherit`: "rw", "ro", "na" (no access) or "-" (nothing).
+fn inherited(code: &str) -> Permission {
+    match code {
+        "rw" => Permission::ReadWrite,
+        "ro" => Permission::ReadOnly,
+        "na" => Permission::Deny,
+        _ => Permission::None,
+    }
+}
+
+pub(crate) fn account_shares_from_api(data: &Value) -> Vec<AccountShare> {
+    let mut shares: Vec<AccountShare> = data["shares"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            Some(AccountShare {
+                share: item["name"].as_str()?.to_owned(),
+                acl: item["is_aclmode"].as_bool().unwrap_or(true),
+                own: permission_of(item),
+                groups: inherited(item["inherit"].as_str().unwrap_or("-")),
+            })
+        })
+        .collect();
+    shares.sort_by_key(|share| share.share.to_lowercase());
+    shares
+}
+
 pub(crate) fn access_from_api(data: &Value) -> Vec<ShareAccess> {
     data["items"]
         .as_array()
@@ -264,6 +305,29 @@ impl Client {
             )
             .await?;
         Ok(access_from_api(&data))
+    }
+
+    /// One account's permissions on every shared folder, its own and its groups'.
+    pub async fn account_access(
+        &self,
+        session: &Session,
+        account: &str,
+    ) -> Result<Vec<AccountShare>, Error> {
+        let data = self
+            .call(
+                session,
+                "SYNO.Core.Share.Permission",
+                "list_by_user",
+                1,
+                &[
+                    ("name", account),
+                    ("user_group_type", "local_user"),
+                    ("share_type", "all"),
+                    ("additional", r#"["is_aclmode"]"#),
+                ],
+            )
+            .await?;
+        Ok(account_shares_from_api(&data))
     }
 
     /// Sets accounts' own permissions on one shared folder. `Custom` is left alone.
@@ -388,6 +452,31 @@ mod tests {
         assert_eq!(written["is_writable"], true);
         assert_eq!(written["is_readonly"], false);
         assert_eq!(permission_json("ben", Permission::Deny)["is_deny"], true);
+    }
+
+    #[test]
+    fn reads_an_accounts_own_and_group_permissions() {
+        // As DSM 7.2.2 answers `list_by_user`.
+        let data = json!({ "shares": [
+            { "name": "mounttest", "inherit": "-", "is_aclmode": true, "is_writable": true },
+            { "name": "docker", "inherit": "na", "is_aclmode": true },
+            { "name": "Archive", "inherit": "ro", "is_aclmode": false, "is_deny": true },
+        ]});
+        let shares = account_shares_from_api(&data);
+        let names: Vec<&str> = shares.iter().map(|share| share.share.as_str()).collect();
+        assert_eq!(names, ["Archive", "docker", "mounttest"]);
+        assert_eq!(
+            (shares[0].own, shares[0].groups, shares[0].acl),
+            (Permission::Deny, Permission::ReadOnly, false)
+        );
+        assert_eq!(
+            (shares[1].own, shares[1].groups),
+            (Permission::None, Permission::Deny)
+        );
+        assert_eq!(
+            (shares[2].own, shares[2].groups),
+            (Permission::ReadWrite, Permission::None)
+        );
     }
 
     #[test]

@@ -35,6 +35,9 @@ pub struct MountStatus {
     /// Round trip of a TCP connect to the address in use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latency_ms: Option<f64>,
+    /// How the name of the address in use is looked up, and whether encrypted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns: Option<crate::dns::Resolution>,
     /// The service's last words when it failed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log: Option<String>,

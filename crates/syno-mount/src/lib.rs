@@ -8,6 +8,7 @@
 #[cfg(unix)]
 pub mod bookmarks;
 pub mod config;
+pub mod dns;
 #[cfg(unix)]
 mod linux;
 pub mod manager;

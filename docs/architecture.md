@@ -53,9 +53,13 @@ In a temporary folder inside the mount: write and read 1 MiB, `chmod 640`, owner
 
 ## Administrator area
 
-A separate DSM sign-in that must be an administrator. It reads `SYNO.Core.User` (accounts), `SYNO.Core.Group.Member` (members of "administrators"), `SYNO.Core.AppPriv.Rule` for the application `SYNO.SFTP` (the rule for everyone and per-account rules), `SYNO.Core.Share` and, per shared folder, `SYNO.Core.Share.Permission`. Changes are collected in the interface and only sent after the user confirmed the list: an SFTP rule per account is set (`set`) or removed (`delete`, back to the rule for everyone), and the accounts' own permissions on a folder are written in one `set` call. "Custom" permissions from DSM's ACL editor are shown but not changed.
+A separate DSM sign-in that must be an administrator. It reads `SYNO.Core.User` (accounts), `SYNO.Core.Group.Member` (members of "administrators"), `SYNO.Core.AppPriv.Rule` for the application `SYNO.SFTP` (the rule for everyone and per-account rules), `SYNO.Core.Share` and, per shared folder, `SYNO.Core.Share.Permission`. The view by account reads `SYNO.Core.Share.Permission` `list_by_user`: per shared folder the account's own permission and, in `inherit`, what its groups and the folder's ACL give it (`rw`, `ro`, `na` for no access, `-` for nothing). The preview applies DSM's rule (no access wins, otherwise the wider permission) to the edits not sent yet and adds `/home` when the home service is on; with SFTP denied it shows nothing. Changes are collected in the interface and only sent after the user confirmed the list: an SFTP rule per account is set (`set`) or removed (`delete`, back to the rule for everyone), and the accounts' own permissions on a folder are written in one `set` call. "Custom" permissions from DSM's ACL editor are shown but not changed.
 
 The sign-in uses the session name `FileStation`: DSM refuses accounts outside the administrators with error 402 for session names it does not know, while `FileStation` is open to every account and still allows the administrator APIs.
+
+## Encrypted DNS
+
+The status of a mounted folder says how the name of the address in use is looked up (`dns.rs`, cached for a minute): no query for an IP address or a name in the hosts file; multicast DNS for `.local`; on Linux with systemd-resolved, the DNS over TLS mode of the link that answered (`resolvectl query`, `resolvectl dnsovertls`: `yes` encrypted, `opportunistic` maybe not); another resolver on `127.0.0.1` cannot be judged; anything else is plain DNS. On Windows, PowerShell reads the DNS servers of the interface with the default route and whether DNS over HTTPS is set up for each (`Get-DnsClientDohServerAddress`, `DohFlags` per interface, `EnableAutoDoh`). Only the way to the resolver is judged; the resolver itself still sees the name.
 
 ## Windows
 

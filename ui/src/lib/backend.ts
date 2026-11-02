@@ -98,8 +98,14 @@ export interface MountStatus {
   state: MountState;
   connected?: { route: Route; address: Address; since: number };
   latencyMs?: number;
+  dns?: DnsResolution;
   log?: string;
 }
+
+/** How the name of the address in use is looked up, and whether encrypted. */
+export type DnsResolution =
+  | { kind: 'noQuery' | 'multicast' | 'opportunistic' | 'localResolver' | 'plain' | 'unknown' }
+  | { kind: 'encrypted'; protocol: 'tls' | 'https' };
 
 export interface MountView {
   mount: Mount;
@@ -293,6 +299,23 @@ export interface ShareAccess {
   admin: boolean;
 }
 
+/** An account's own permission on a shared folder and what its groups give. */
+export interface AccountShare {
+  share: string;
+  acl: boolean;
+  own: Permission;
+  groups: Permission;
+}
+
+/** What DSM applies: a denial wins, then the wider of own and group permission. */
+export function effectivePermission(own: Permission, groups: Permission): Permission {
+  if (own === 'deny' || groups === 'deny') return 'deny';
+  if (own === 'custom') return 'custom';
+  if (own === 'readWrite' || groups === 'readWrite') return 'readWrite';
+  if (own === 'readOnly' || groups === 'readOnly') return 'readOnly';
+  return 'none';
+}
+
 export interface AdminOverview {
   device: KnownDevice;
   services: Services;
@@ -310,6 +333,8 @@ export const adminConnect = (request: ConnectRequest) =>
 export const adminOverview = () => invoke<AdminOverview>('admin_overview');
 export const adminShareAccess = (share: string) =>
   invoke<ShareAccess[]>('admin_share_access', { share });
+export const adminAccountAccess = (account: string) =>
+  invoke<AccountShare[]>('admin_account_access', { account });
 export const adminApply = (changes: AdminChanges) => invoke<void>('admin_apply', { changes });
 export const adminEnableServices = () => invoke<Services>('admin_enable_services');
 export const adminDisconnect = () => invoke<void>('admin_disconnect');

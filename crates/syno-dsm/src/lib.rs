@@ -22,7 +22,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
-pub use accounts::{Access, Account, AdminShare, Permission, SftpRule, ShareAccess};
+pub use accounts::{Access, Account, AccountShare, AdminShare, Permission, SftpRule, ShareAccess};
 pub use files::{CpuKind, Services, Share};
 pub use overview::{Drive, DriveKind, Health, NetworkPort, Overview, Volume};
 pub use setup::{

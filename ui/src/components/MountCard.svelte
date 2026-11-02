@@ -4,11 +4,14 @@
   import Globe from '@lucide/svelte/icons/globe';
   import HardDrive from '@lucide/svelte/icons/hard-drive';
   import House from '@lucide/svelte/icons/house';
+  import Lock from '@lucide/svelte/icons/lock';
+  import LockOpen from '@lucide/svelte/icons/lock-open';
   import {
     openFolder,
     startMount,
     stopMount,
     toFailure,
+    type DnsResolution,
     type Failure,
     type MountView,
   } from '../lib/backend';
@@ -25,6 +28,20 @@
     onchanged: () => void;
     onaction: (action: MountAction) => void;
   } = $props();
+
+  /** The DNS fact's text and tone; nothing for an IP address. */
+  function dnsFact(dns: DnsResolution | undefined) {
+    if (!dns || dns.kind === 'noQuery') return null;
+    const key = dns.kind === 'encrypted' ? `dns-encrypted-${dns.protocol}` : `dns-${dns.kind}`;
+    const tone =
+      dns.kind === 'encrypted'
+        ? 'good'
+        : dns.kind === 'plain' || dns.kind === 'opportunistic'
+          ? 'warn'
+          : 'neutral';
+    return { text: t(key), hint: t(`${key}-hint`), tone, locked: dns.kind === 'encrypted' };
+  }
+  const dns = $derived(dnsFact(view.status.dns));
 
   let busy = $state(false);
   let failure = $state<Failure | null>(null);
@@ -95,6 +112,16 @@
     {/if}
     {#if status.latencyMs !== undefined}
       <span class="fact">{t('mount-latency', { value: milliseconds(status.latencyMs) })}</span>
+    {/if}
+    {#if dns}
+      <span class="fact dns {dns.tone}" title={dns.hint}>
+        {#if dns.locked}
+          <Lock size={14} aria-hidden="true" />
+        {:else}
+          <LockOpen size={14} aria-hidden="true" />
+        {/if}
+        {dns.text}
+      </span>
     {/if}
     <span class="fact selectable">{mount.account}@{mount.lan.host}:{mount.remotePath}</span>
   </div>
@@ -223,6 +250,14 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+
+  .dns.good {
+    color: var(--success);
+  }
+
+  .dns.warn {
+    color: var(--warning);
   }
 
   details summary {
