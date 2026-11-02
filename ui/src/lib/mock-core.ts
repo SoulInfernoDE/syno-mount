@@ -5,6 +5,7 @@
 // `&shot=selftest` opens a self-test and `&shot=add` the assistant.
 
 import type {
+  Address,
   Account,
   AdminChanges,
   AdminShare,
@@ -402,6 +403,18 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
   self_test: async () => (await wait(1200), checks),
   speed_test: async () => (await wait(1500), speed),
   open_folder: async () => undefined,
+  check_address: async (args) => {
+    const address = args.address as Address;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (address.tunnel && !address.tunnel.pinnedCertificate && address.host.endsWith('.lan')) {
+      throw {
+        key: 'proxy-certificate-untrusted',
+        detail:
+          'SHA256:3F:9A:0C:52:7B:E1:44:D8:90:6E:21:AB:5C:F7:13:08:C2:6D:9E:41:B7:55:0A:EF:38:72:19:C4:6B:D0:85:2E',
+      };
+    }
+    return { latencyMs: address.tunnel ? 38.4 : 21.7 };
+  },
   command_line: async (args) => {
     const mount = find(args.id).mount;
     return `sshfs -f -o Port=22 -o IdentityFile=${mount.keyPath} -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/anna/.local/share/syno-mount/known_hosts -o HostKeyAlias=${mount.hostKeyAlias} -o StrictHostKeyChecking=yes -o BatchMode=yes -o reconnect -o ServerAliveInterval=15 -o max_conns=4 -o idmap=file ${mount.account}@${mount.lan.host}:${mount.remotePath} ${mount.localPath}`;

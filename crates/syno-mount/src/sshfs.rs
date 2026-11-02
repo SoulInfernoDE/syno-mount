@@ -64,13 +64,27 @@ fn checked(path: &Path) -> Result<String, String> {
     Ok(text)
 }
 
+/// ssh's `ProxyCommand` for a tunnelled address: this program, connecting stdin
+/// and stdout to the proxy. ssh runs it through the shell and expands `%`.
+fn proxy_command(program: &Path, id: &str) -> Result<String, String> {
+    let program = checked(program)?;
+    if program.contains('\'') {
+        return Err(format!(
+            "a path with a quote cannot be passed to ssh: {program}"
+        ));
+    }
+    Ok(format!("'{}' tunnel {id}", program.replace('%', "%%")))
+}
+
 /// Arguments after `sshfs` that mount `mount` over `address` in the foreground.
+/// `program` is this app, for the tunnel through a reverse proxy.
 pub fn arguments(
     mount: &Mount,
     paths: &Paths,
     address: &Address,
     route: Route,
     version: (u32, u32, u32),
+    program: &Path,
 ) -> Result<Vec<String>, String> {
     let tuning = &mount.tuning;
     let mut options = vec![
@@ -103,6 +117,13 @@ pub fn arguments(
         format!("fsname=syno-mount:{}", mount.id),
         "auto_unmount".into(),
     ];
+    if address.tunnel.is_some() {
+        // ssh speaks through `syno-mount tunnel`, which opens TLS to the proxy.
+        options.insert(
+            1,
+            format!("ProxyCommand={}", proxy_command(program, &mount.id)?),
+        );
+    }
     if version >= (3, 7, 0) && tuning.connections > 1 {
         options.push(format!("max_conns={}", tuning.connections));
     }
@@ -164,6 +185,9 @@ pub fn display(arguments: &[String]) -> String {
 mod tests {
     use super::*;
     use crate::config::tests::sample;
+    use syno_ssh::Tunnel;
+
+    const PROGRAM: &str = "/usr/bin/syno-mount";
 
     #[test]
     fn reads_the_version() {
@@ -180,7 +204,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let paths = Paths::with_home(dir.path().to_owned());
         let mount = sample(dir.path());
-        let arguments = arguments(&mount, &paths, &mount.lan, Route::Lan, (3, 7, 3)).unwrap();
+        let arguments = arguments(
+            &mount,
+            &paths,
+            &mount.lan,
+            Route::Lan,
+            (3, 7, 3),
+            Path::new(PROGRAM),
+        )
+        .unwrap();
         let line = display(&arguments);
         assert_eq!(arguments[0], "-f");
         for expected in [
@@ -210,14 +242,61 @@ mod tests {
         mount.remote_uid = None;
         mount.remote_gid = None;
         let internet = mount.internet.clone().unwrap();
-        let line =
-            display(&arguments(&mount, &paths, &internet, Route::Internet, (3, 6, 0)).unwrap());
+        let line = display(
+            &arguments(
+                &mount,
+                &paths,
+                &internet,
+                Route::Internet,
+                (3, 6, 0),
+                Path::new(PROGRAM),
+            )
+            .unwrap(),
+        );
         assert!(line.contains("Port=2222"));
         assert!(line.contains("Compression=yes"));
         assert!(line.contains(r"Ciphers=chacha20-poly1305@openssh.com\,"));
         assert!(line.contains("idmap=user"));
         assert!(!line.contains("max_conns"));
         assert!(line.contains("anna@nas.example.org:/Media"));
+        assert!(!line.contains("ProxyCommand"));
+    }
+
+    #[test]
+    fn speaks_through_the_tunnel_behind_a_proxy() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::with_home(dir.path().to_owned());
+        let mount = sample(dir.path());
+        let mut internet = mount.internet.clone().unwrap();
+        internet.port = 443;
+        internet.tunnel = Some(Tunnel::new(&internet.host));
+        let program = Path::new("/opt/Syno Mount/syno-mount");
+        let arguments = arguments(
+            &mount,
+            &paths,
+            &internet,
+            Route::Internet,
+            (3, 7, 3),
+            program,
+        )
+        .unwrap();
+        assert!(arguments.contains(&format!(
+            "ProxyCommand='/opt/Syno Mount/syno-mount' tunnel {}",
+            mount.id
+        )));
+        // The pinned host key is checked exactly as without the tunnel.
+        assert!(arguments.iter().any(|a| a == "StrictHostKeyChecking=yes"));
+        let quoted = Path::new("/tmp/it's/syno-mount");
+        assert!(arguments_for(&mount, &paths, &internet, quoted).is_err());
+    }
+
+    fn arguments_for(
+        mount: &Mount,
+        paths: &Paths,
+        address: &Address,
+        program: &Path,
+    ) -> Result<Vec<String>, String> {
+        arguments(mount, paths, address, Route::Internet, (3, 7, 3), program)
     }
 
     #[test]
@@ -226,7 +305,17 @@ mod tests {
         let paths = Paths::with_home(dir.path().to_owned());
         let mut mount = sample(dir.path());
         mount.local_path = dir.path().join("a,b");
-        assert!(arguments(&mount, &paths, &mount.lan, Route::Lan, (3, 7, 3)).is_err());
+        assert!(
+            arguments(
+                &mount,
+                &paths,
+                &mount.lan,
+                Route::Lan,
+                (3, 7, 3),
+                Path::new(PROGRAM)
+            )
+            .is_err()
+        );
     }
 
     #[test]

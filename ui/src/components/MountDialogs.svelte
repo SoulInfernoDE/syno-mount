@@ -1,15 +1,16 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
+  import InternetAddress from './InternetAddress.svelte';
   import SelfTest from './SelfTest.svelte';
   import {
     commandLine,
     isWindows,
-    parseAddress,
     removeMount,
     selfTest,
     speedTest,
     toFailure,
     updateMount,
+    type Address,
     type Cache,
     type Check,
     type CpuKind,
@@ -88,8 +89,7 @@
   let atLogin = $state(mount.atLogin);
   // svelte-ignore state_referenced_locally
   let bookmark = $state(mount.bookmark);
-  // svelte-ignore state_referenced_locally
-  let internet = $state(mount.internet ? `${mount.internet.host}:${mount.internet.port}` : '');
+  let internetAddress = $state<Address | null | undefined>(undefined);
   // svelte-ignore state_referenced_locally
   let cpu = $state<CpuKind>(mount.tuning.cpu);
   // svelte-ignore state_referenced_locally
@@ -99,7 +99,6 @@
   // svelte-ignore state_referenced_locally
   let cache = $state<Cache>(mount.tuning.cache);
   let saved = $state(false);
-  const internetAddress = $derived(internet.trim() ? parseAddress(internet, 22) : undefined);
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
@@ -108,7 +107,7 @@
       updateMount(mount.id, {
         atLogin,
         bookmark,
-        internet: internetAddress,
+        internet: internetAddress ?? undefined,
         tuning: { cpu, connections, compressInternet: compress, cache },
       }),
     );
@@ -212,19 +211,12 @@
           >
         </label>
       {/if}
-      <label class="field">
-        <span>{t('settings-internet')}</span>
-        <input
-          class="input"
-          bind:value={internet}
-          placeholder={t('settings-internet-placeholder')}
-          spellcheck="false"
-          aria-invalid={internetAddress === null}
-        />
-        <span class="subtle">{t('settings-internet-hint')}</span>
-        {#if internetAddress === null}<span class="invalid">{t('settings-internet-invalid')}</span
-          >{/if}
-      </label>
+      <InternetAddress
+        label={t('settings-internet')}
+        initial={mount.internet}
+        mountId={mount.id}
+        bind:address={internetAddress}
+      />
       <label class="field">
         <span>{t('settings-cipher')}</span>
         <select class="select" bind:value={cpu}>
@@ -297,11 +289,6 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
-  }
-
-  .invalid {
-    color: var(--danger);
-    font-size: 0.92em;
   }
 
   .speed {

@@ -43,9 +43,21 @@ export interface KnownDevice {
   fingerprint?: string;
 }
 
+/** Through a reverse proxy: TLS to the proxy, SSH inside. */
+export interface Tunnel {
+  serverName: string;
+  alpn: boolean;
+  pinnedCertificate?: string;
+}
+
 export interface Address {
   host: string;
   port: number;
+  tunnel?: Tunnel;
+}
+
+export interface AddressCheck {
+  latencyMs: number;
 }
 
 export type CpuKind = 'x86' | 'arm' | 'unknown';
@@ -227,6 +239,8 @@ export const speedTest = (id: string, megabytes?: number) =>
   invoke<Speed>('speed_test', { id, megabytes });
 export const openFolder = (id: string) => invoke<void>('open_folder', { id });
 export const commandLine = (id: string) => invoke<string>('command_line', { id });
+export const checkAddress = (id: string, address: Address) =>
+  invoke<AddressCheck>('check_address', { id, address });
 
 /** "nas.local:5001", "192.168.1.20" or "[fe80::1]:5001" → host and port. */
 export function parseAddress(

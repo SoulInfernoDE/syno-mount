@@ -82,9 +82,16 @@ pub fn write_owner_maps(paths: &Paths, mount: &Mount) -> io::Result<()> {
 /// The sshfs command over the LAN address, as the user reads it in the app.
 pub fn command_line(paths: &Paths, mount: &Mount) -> String {
     let version = sshfs::installed_version().unwrap_or((3, 7, 0));
-    sshfs::arguments(mount, paths, &mount.lan, Route::Lan, version)
-        .map(|arguments| sshfs::display(&arguments))
-        .unwrap_or_else(|error| error)
+    sshfs::arguments(
+        mount,
+        paths,
+        &mount.lan,
+        Route::Lan,
+        version,
+        &systemd::program(),
+    )
+    .map(|arguments| sshfs::display(&arguments))
+    .unwrap_or_else(|error| error)
 }
 
 /// Writes everything a mount needs and sets it to start at login or not.
@@ -205,7 +212,7 @@ pub fn run_mount(paths: &Paths, id: &str) -> Result<(), String> {
         return Err(error.to_string());
     }
     let version = sshfs::installed_version().ok_or("sshfs is not installed")?;
-    let arguments = sshfs::arguments(&mount, paths, &address, route, version)?;
+    let arguments = sshfs::arguments(&mount, paths, &address, route, version, &systemd::program())?;
     eprintln!("{}", sshfs::display(&arguments));
     status::note_connected(paths, &mount.id, route, &address);
     // Only returns when sshfs could not be started.

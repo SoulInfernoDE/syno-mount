@@ -2,7 +2,7 @@
 
 > Deutsche Fassung. Englisches Original: [https-tunnel.md](https-tunnel.md)
 
-Stand: Entwurf, davon ist noch nichts gebaut.
+Stand: Phase 1 (Linux) ist gebaut und gegen nginx vor Virtual DSM getestet; Phasen 2 bis 4 sind geplant.
 
 ## Ziel
 
@@ -57,6 +57,16 @@ Gemessen auf einem Computer (Client, nginx und Virtual DSM auf derselben Maschin
 | Über den TLS-Proxy  | 328 MB/s     | 320–321 MB/s |
 
 Auf einer Maschine konkurriert die ganze Verschlüsselung um denselben Prozessor; das ist also der ungünstigste Fall. 320 MB/s sind etwa 2,6 Gbit/s, mehr als der Upload üblicher Internetanschlüsse; über das Internet bestimmen Leitung und Latenz die Geschwindigkeit, nicht der Tunnel. Der eingebaute Tunnel mit großen Puffern sollte näher an den direkten Wert kommen; Phase 1 misst das erneut, Ziel sind 80 % des direkten Werts auf einer Maschine.
+
+Mit dem eingebauten Tunnel (Phase 1, Release-Build) und den sshfs-Optionen der App, auf dieselbe Weise gemessen:
+
+| Weg                 | Schreiben    | Lesen        |
+| ------------------- | ------------ | ------------ |
+| Direkt zum SSH-Port | 181–184 MB/s | 264–267 MB/s |
+| `openssl s_client`  | 186–187 MB/s | 252–257 MB/s |
+| `syno-mount tunnel` | 181–185 MB/s | 226–240 MB/s |
+
+Schreiben ist auf jedem Weg gleich; Lesen durch den Tunnel erreicht 85 bis 91 % des direkten Werts, über dem Ziel von 80 %. Mit den Optionen der App setzt die Test-VM selbst die Grenze, nicht der Tunnel. Der Selbsttest zeigt durch den Tunnel dasselbe Ergebnis wie im LAN.
 
 Das NAS hat keine Mehrarbeit: TLS endet am Proxy.
 
@@ -130,4 +140,19 @@ Die Dokumentation bekommt dasselbe für Traefik (TCP-Router mit `HostSNI` oder A
 
 Neue Crates: `rustls` (ring), `tokio-rustls`, `rustls-platform-verifier`, später `rcgen`; alle Apache-2.0, MIT oder ISC, was `deny.toml` erlaubt.
 
-Offene Punkte: Die Weiterleitung nach Namen ist getestet (siehe Messung); die nach ALPN wird in Phase 1 geprüft, ebenso ob sie mit anderen verbreiteten Frontends funktioniert (Nginx Proxy Manager, Caddy mit dem layer4-Modul). Außerdem, wie weit der eingebaute Tunnel auf einer Maschine kommt.
+### Phase 1 getestet
+
+nginx 1.29 vor Virtual DSM 7.2.2 mit der Konfiguration oben (dazu Wege für einen eigenen Namen und für ein ausgefallenes NAS), ein selbst signiertes Zertifikat:
+
+| Fall                                             | Ergebnis                                                 |
+| ------------------------------------------------ | -------------------------------------------------------- |
+| ALPN, Name des Proxys, Zertifikat festgehalten   | erreichbar, Host-Key durch den Tunnel gelesen            |
+| Weiterleitung nach Namen, ohne ALPN              | erreichbar                                               |
+| Ohne ALPN, der Proxy schickt es ans Web          | „der Proxy antwortet, aber dahinter kein SSH-Dienst“     |
+| Selbst signiertes Zertifikat, nicht festgehalten | „nicht vertraut“, mit dem Fingerabdruck zum Bestätigen   |
+| Anderes Zertifikat als das festgehaltene         | „das Zertifikat hat sich geändert“                       |
+| NAS hinter dem Proxy aus                         | „der Proxy antwortet, aber dahinter kein SSH-Dienst“     |
+| Proxy aus                                        | „der SSH-Dienst antwortet nicht“                         |
+| Einbinden ohne erreichbare LAN-Adresse           | nach 0,26 s durch den Tunnel eingebunden, Weg „Internet“ |
+
+Offene Punkte: weitere verbreitete Frontends (Nginx Proxy Manager, Caddy mit dem layer4-Modul, Traefik, HAProxy); Lesen durch den Tunnel könnte mit nicht blockierenden Pipes statt der Standardein- und -ausgabe von tokio noch etwas schneller werden.

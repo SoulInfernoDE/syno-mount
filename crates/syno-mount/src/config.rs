@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use syno_dsm::CpuKind;
+pub use syno_ssh::Tunnel;
 
 /// An address the SSH service of a NAS answers on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +15,9 @@ use syno_dsm::CpuKind;
 pub struct Address {
     pub host: String,
     pub port: u16,
+    /// Through a reverse proxy on `host:port` (usually 443) instead of directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<Tunnel>,
 }
 
 /// How eagerly directory listings are cached.
@@ -181,10 +185,12 @@ pub(crate) mod tests {
             lan: Address {
                 host: "192.168.1.20".into(),
                 port: 22,
+                tunnel: None,
             },
             internet: Some(Address {
                 host: "nas.example.org".into(),
                 port: 2222,
+                tunnel: None,
             }),
             host_key_alias: "syno-mount.nas.local_5001".into(),
             host_key_algorithm: "ssh-ed25519".into(),

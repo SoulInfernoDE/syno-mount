@@ -20,6 +20,7 @@ pub mod status;
 pub mod system;
 #[cfg(unix)]
 pub mod systemd;
+pub mod tunnel;
 #[cfg(windows)]
 mod windows;
 

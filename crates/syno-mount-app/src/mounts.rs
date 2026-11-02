@@ -98,6 +98,48 @@ pub async fn stop_mount(id: String, state: State<'_, AppState>) -> Result<(), Fa
     blocking(move || Ok(manager::stop(&mount)?)).await
 }
 
+/// What a check of an address found.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddressCheck {
+    latency_ms: f64,
+}
+
+/// Connects to `address` (through the proxy, if it has a tunnel) and checks that the
+/// NAS there presents the pinned host key. Nothing is signed in or changed.
+#[tauri::command]
+pub async fn check_address(
+    id: String,
+    address: Address,
+    state: State<'_, AppState>,
+) -> Result<AddressCheck, Failure> {
+    let mount = find(&state, &id)?;
+    let pinned = KnownHosts::new(state.paths.known_hosts())
+        .get(&mount.host_key_alias)
+        .ok_or_else(|| Failure::new("host-key-unknown", None))?;
+    if let Some(tunnel) = address.tunnel.clone() {
+        // The probe tells apart the proxy, its certificate and the NAS behind it.
+        let address = address.clone();
+        blocking(move || {
+            Ok(syno_ssh::tunnel::probe(
+                &address.host,
+                address.port,
+                &tunnel,
+                std::time::Duration::from_secs(5),
+            )?)
+        })
+        .await?;
+    }
+    let started = std::time::Instant::now();
+    let seen =
+        syno_ssh::scan_host_key(&address.host, address.port, address.tunnel.as_ref()).await?;
+    let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+    if seen.openssh != pinned.openssh {
+        return Err(Failure::new("host-key-changed", seen.fingerprint));
+    }
+    Ok(AddressCheck { latency_ms })
+}
+
 /// The settings a user may change after setup.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -177,6 +219,7 @@ pub async fn remove_mount(
             port: mount.lan.port,
             account: mount.account.clone(),
             host_key: known.get(&mount.host_key_alias),
+            tunnel: None,
         };
         if let Ok(key) = KeyPair::load_or_create(&mount.key_path, "") {
             syno_mount::setup::remove_key(&target, &key, &mount.account).await?;

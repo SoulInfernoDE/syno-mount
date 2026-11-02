@@ -30,6 +30,14 @@ fn headless(arguments: &[String]) -> Option<ExitCode> {
             }
         },
         [command] if command == "agent" => manager::agent(&paths),
+        // ssh's ProxyCommand for a folder behind a reverse proxy.
+        [command, id] if command == "tunnel" => match syno_mount::tunnel::run(&paths, id) {
+            Ok(()) => Some(ExitCode::SUCCESS),
+            Err(error) => {
+                eprintln!("{error}");
+                Some(ExitCode::FAILURE)
+            }
+        },
         // For scripts and support: the state of every folder, and a folder's self-test.
         [command] if command == "status" => {
             let store = MountStore::load(&paths.mounts());
@@ -109,6 +117,7 @@ fn main() -> ExitCode {
             mounts::start_mount,
             mounts::stop_mount,
             mounts::update_mount,
+            mounts::check_address,
             mounts::remove_mount,
             mounts::self_test,
             mounts::speed_test,

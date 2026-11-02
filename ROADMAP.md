@@ -89,6 +89,13 @@ Tested since (details in [test environment](docs/test-environment.md)): DSM 7 pu
 - [ ] Windows: assistant and administrator area in the window, autostart at sign-in, suspend
 - [ ] Windows: install WinFsp and rclone from the app (winget)
 
+## v0.7 – Behind a reverse proxy
+
+- [x] HTTPS tunnel, phase 1 (Linux): SSH inside TLS to a reverse proxy on port 443, routed by ALPN or name; certificate checked against the system or pinned; "Check connection" with the pinned host key; tested against nginx in front of Virtual DSM ([design](docs/https-tunnel.md))
+- [ ] Phase 2: Windows, through a local forwarder for rclone
+- [ ] Phase 3: device certificates (mTLS), so that only known computers reach SSH at all
+- [ ] Phase 4: proxy configuration to copy, for nginx, Traefik and HAProxy
+
 ## Later
 
 - [ ] **NFSv4.1** backend: real UID/GID and locking on the LAN; over the internet only through a VPN (for example Tailscale from Package Center)

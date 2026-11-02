@@ -56,6 +56,16 @@ Both run in temporary folders and remove the key from the NAS at the end. The `s
 
 Not tested yet: suspend and resume of a real computer, and a real network change.
 
+## Behind a reverse proxy
+
+nginx in a container in front of the Virtual DSM stands in for the reverse proxy; the configuration is the one in [https-tunnel.md](https-tunnel.md), with `proxy_pass 127.0.0.1:25022` and a self-signed certificate. The probe and the host key read through the tunnel:
+
+```bash
+cargo run -p syno-ssh --example tunnel-probe -- 127.0.0.1 28443 proxy.test.local pin=SHA256:…
+```
+
+For a mount, `… --example systemd prepare` writes the folder, then its internet address gets a `tunnel` in `mounts.json` and the LAN port a closed one, so that `syno-mount run-mount <id>` takes the tunnel. Results: [https-tunnel.md](https-tunnel.md#phase-1-tested).
+
 ## Windows
 
 Tested on a Windows 11 VM (build 26200) with WinFsp and rclone v1.75.2 from winget and the installer built by the release workflow (`-setup.exe /S`). The VM reaches the Virtual DSM through an SSH reverse tunnel (`ssh -R 25022:127.0.0.1:25022 <vm>`), so nothing on the network changes. The folder list, key and `known_hosts` were written as the app writes them; `syno-mount.exe status` and `syno-mount.exe selftest <id>` read the result without a window.

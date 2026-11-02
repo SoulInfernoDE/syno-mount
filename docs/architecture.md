@@ -41,6 +41,8 @@ The password lives only in memory while the assistant is open.
 
 The service has `Restart=on-failure`, so systemd tries again every 10 seconds when the NAS is away.
 
+An internet address can be **behind a reverse proxy** (`tunnel` in `mounts.json`). Then "reachable" means TLS to the proxy and the SSH banner of the NAS behind it, and sshfs gets `ProxyCommand='<program>' tunnel <id>`: `syno-mount tunnel` opens TLS with the ALPN protocol `syno-mount-ssh` (rustls, ring) and connects it to ssh's standard input and output. Everything else, the pinned host key included, stays as it is. See [https-tunnel.md](https-tunnel.md).
+
 ## Agent
 
 Every 5 seconds the agent compares the time since boot (`/proc/uptime`, which counts suspend) with a monotonic clock that does not, and `/proc/net/route` with its last state. After a suspend or a route change, and every 30 seconds anyway, it checks every running folder: a mount that does not answer within 4 seconds is released (`fusermount3 -uz`) and its service restarted; a folder on the internet address moves back when the LAN answers again, and the other way round.

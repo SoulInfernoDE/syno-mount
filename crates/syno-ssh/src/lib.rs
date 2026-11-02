@@ -8,6 +8,7 @@
 
 mod keys;
 mod remote;
+pub mod tunnel;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -20,6 +21,7 @@ use serde::Serialize;
 
 pub use keys::{KeyPair, KnownHosts, host_alias};
 pub use remote::{KEY_MARKER, Layout};
+pub use tunnel::Tunnel;
 
 /// Time for TCP connect and SSH handshake together.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,6 +38,14 @@ pub enum Error {
     AuthFailed,
     #[error("SFTP: {0}")]
     Sftp(String),
+    #[error("TLS to the proxy: {0}")]
+    Tls(String),
+    #[error("the proxy's certificate is not trusted ({fingerprint})")]
+    CertificateUntrusted { fingerprint: String },
+    #[error("the proxy's certificate changed ({fingerprint})")]
+    CertificateChanged { fingerprint: String },
+    #[error("the proxy answers, but no SSH service behind it")]
+    NoSshBehindProxy,
     #[error("{0}")]
     Io(String),
 }
@@ -49,6 +59,10 @@ impl Error {
             Self::HostKeyChanged { .. } => "host-key-changed",
             Self::AuthFailed => "ssh-auth-failed",
             Self::Sftp(_) => "sftp",
+            Self::Tls(_) => "proxy-tls",
+            Self::CertificateUntrusted { .. } => "proxy-certificate-untrusted",
+            Self::CertificateChanged { .. } => "proxy-certificate-changed",
+            Self::NoSshBehindProxy => "no-ssh-behind-proxy",
             Self::Io(_) => "io",
         }
     }
@@ -102,6 +116,8 @@ pub struct Target {
     pub account: String,
     /// The pinned host key; `None` only for [`scan_host_key`].
     pub host_key: Option<HostKey>,
+    /// Through a reverse proxy; `host` and `port` are then the proxy's.
+    pub tunnel: Option<Tunnel>,
 }
 
 struct Checker {
@@ -154,14 +170,17 @@ async fn open(target: &Target) -> Result<Handle<Checker>, Error> {
         expected: expected.clone(),
         seen: seen.clone(),
     };
-    let address = (target.host.as_str(), target.port);
-    let connected =
-        tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config(), address, checker)).await;
+    let connected = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        handshake(&target.host, target.port, target.tunnel.as_ref(), checker),
+    )
+    .await;
     let seen = seen.lock().ok().and_then(|mut seen| seen.take());
     match connected {
         Err(_) => Err(Error::Network("timed out".into())),
         Ok(Ok(handle)) => Ok(handle),
-        Ok(Err(error)) => Err(match (seen, expected) {
+        Ok(Err(Handshake::Tunnel(error))) => Err(error),
+        Ok(Err(Handshake::Ssh(error))) => Err(match (seen, expected) {
             (Some(key), None) => Error::HostKeyUnknown {
                 fingerprint: HostKey::from_public(&key).fingerprint,
             },
@@ -175,24 +194,53 @@ async fn open(target: &Target) -> Result<Handle<Checker>, Error> {
     }
 }
 
+enum Handshake {
+    Tunnel(Error),
+    Ssh(russh::Error),
+}
+
+/// The SSH handshake, directly or through the proxy.
+async fn handshake(
+    host: &str,
+    port: u16,
+    tunnel: Option<&Tunnel>,
+    checker: Checker,
+) -> Result<Handle<Checker>, Handshake> {
+    match tunnel {
+        None => client::connect(config(), (host, port), checker)
+            .await
+            .map_err(Handshake::Ssh),
+        Some(tunnel) => {
+            let stream = tunnel::connect(host, port, tunnel)
+                .await
+                .map_err(Handshake::Tunnel)?;
+            client::connect_stream(config(), stream, checker)
+                .await
+                .map_err(Handshake::Ssh)
+        }
+    }
+}
+
 /// Reads the host key of the SSH service without signing in.
-pub async fn scan_host_key(host: &str, port: u16) -> Result<HostKey, Error> {
+pub async fn scan_host_key(
+    host: &str,
+    port: u16,
+    tunnel: Option<&Tunnel>,
+) -> Result<HostKey, Error> {
     let seen = Arc::new(Mutex::new(None));
     let checker = Checker {
         expected: None,
         seen: seen.clone(),
     };
-    let connected = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        client::connect(config(), (host, port), checker),
-    )
-    .await;
+    let connected =
+        tokio::time::timeout(CONNECT_TIMEOUT, handshake(host, port, tunnel, checker)).await;
     if let Some(key) = seen.lock().ok().and_then(|mut seen| seen.take()) {
         return Ok(HostKey::from_public(&key));
     }
     Err(match connected {
         Err(_) => Error::Network("timed out".into()),
-        Ok(Err(error)) => Error::Network(error.to_string()),
+        Ok(Err(Handshake::Tunnel(error))) => error,
+        Ok(Err(Handshake::Ssh(error))) => Error::Network(error.to_string()),
         Ok(Ok(_)) => Error::Network("no host key".into()),
     })
 }

@@ -100,6 +100,10 @@ pub fn answers(path: &Path, timeout: Duration) -> bool {
 
 /// Time to open a TCP connection, or `None` when nothing answers within `timeout`.
 pub fn reach(address: &Address, timeout: Duration) -> Option<Duration> {
+    if let Some(tunnel) = &address.tunnel {
+        // The proxy answering is not enough: the NAS behind it has to.
+        return syno_ssh::tunnel::probe(&address.host, address.port, tunnel, timeout).ok();
+    }
     let targets = (address.host.as_str(), address.port)
         .to_socket_addrs()
         .ok()?;
@@ -118,6 +122,10 @@ pub fn choose(mount: &Mount, timeout: Duration) -> Option<(Route, Address)> {
         return Some((Route::Lan, mount.lan.clone()));
     }
     let internet = mount.internet.as_ref()?;
+    // rclone cannot use the tunnel yet (phase 2 of the HTTPS tunnel).
+    if cfg!(windows) && internet.tunnel.is_some() {
+        return None;
+    }
     reach(internet, timeout).map(|_| (Route::Internet, internet.clone()))
 }
 
@@ -193,6 +201,7 @@ mod tests {
         let address = Address {
             host: "127.0.0.1".into(),
             port: 9,
+            tunnel: None,
         };
         assert_eq!(reach(&address, Duration::from_millis(300)), None);
     }
@@ -208,6 +217,7 @@ mod tests {
         let address = Address {
             host: "nas".into(),
             port: 22,
+            tunnel: None,
         };
         note_connected(&paths, "m", Route::Lan, &address);
         let note = connected(&paths, "m").unwrap();

@@ -103,7 +103,7 @@ Then run `syno-mount-<version>-windows-x64-setup.exe` (installs for your account
 
 Your own `~/.ssh` stays untouched. On Linux each service runs `syno-mount run-mount <id>`, which picks the LAN or internet address and then runs `sshfs`; on Windows the agent does the same with `rclone mount`. The app shows the full command. More in [docs/architecture.md](docs/architecture.md).
 
-**Over the internet** the NAS needs a forwarded SSH port (better not 22) or a VPN. QuickConnect does not carry SSH. Enter the DDNS name and port as the internet address of a folder.
+**Over the internet** the NAS needs a forwarded SSH port (better not 22), a VPN, or (Linux, new) a **reverse proxy on port 443**: tick "Through HTTPS" next to the internet address, and SSH runs inside TLS, end to end, with the pinned host key as before. The proxy needs a few lines of configuration: [docs/https-tunnel.md](docs/https-tunnel.md). QuickConnect does not carry SSH. Enter the DDNS name and port as the internet address of a folder.
 
 ## Build
 

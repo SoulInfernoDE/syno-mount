@@ -2,7 +2,7 @@
 
 > English original. German version: [https-tunnel.de.md](https-tunnel.de.md)
 
-Status: draft, nothing of it is built yet.
+Status: phase 1 (Linux) is built and tested against nginx in front of Virtual DSM; phases 2 to 4 are planned.
 
 ## Goal
 
@@ -57,6 +57,16 @@ Measured on one computer (client, nginx and Virtual DSM all on the same machine)
 | Through the TLS proxy  | 328 MB/s     | 320–321 MB/s |
 
 On one machine all the encryption competes for the same processor, so this is the worst case. 320 MB/s are about 2.6 Gbit/s, more than the upload of common internet lines; over the internet the line and the latency set the speed, not the tunnel. The built-in tunnel with large buffers should come closer to the direct value; phase 1 measures it again, aiming at 80 % of direct on one machine.
+
+With the built-in tunnel (phase 1, release build) and the app's own sshfs options, measured the same way:
+
+| Way                    | Write        | Read         |
+| ---------------------- | ------------ | ------------ |
+| Direct to the SSH port | 181–184 MB/s | 264–267 MB/s |
+| `openssl s_client`     | 186–187 MB/s | 252–257 MB/s |
+| `syno-mount tunnel`    | 181–185 MB/s | 226–240 MB/s |
+
+Writing is the same on every way; reading through the tunnel reaches 85 to 91 % of direct, above the aim of 80 %. With the app's options the test VM itself sets the limit, not the tunnel. The self-test gives the same result through the tunnel as on the LAN.
 
 The NAS does no extra work: TLS ends at the proxy.
 
@@ -130,4 +140,19 @@ The documentation will carry the same for Traefik (TCP router with `HostSNI` or 
 
 New crates: `rustls` (ring), `tokio-rustls`, `rustls-platform-verifier`, later `rcgen`; all Apache-2.0, MIT or ISC, which `deny.toml` allows.
 
-Open points: routing by name is tested (see the measurement); routing by ALPN is checked in phase 1, as is whether it works with other common front ends (Nginx Proxy Manager, Caddy with the layer4 module). And how far the built-in tunnel gets on one machine.
+### Phase 1 tested
+
+nginx 1.29 in front of Virtual DSM 7.2.2 with the configuration above (plus routes for a dedicated name and for a NAS that is down), a self-signed certificate:
+
+| Case                                       | Result                                                    |
+| ------------------------------------------ | --------------------------------------------------------- |
+| ALPN, the proxy's name, certificate pinned | reachable, host key read through the tunnel               |
+| Routing by name, no ALPN                   | reachable                                                 |
+| No ALPN, so the proxy sends it to the web  | "the proxy answers, but no SSH service behind it"         |
+| Self-signed certificate, not pinned        | "not trusted", with the fingerprint to confirm            |
+| Another certificate than the pinned one    | "the certificate changed"                                 |
+| NAS behind the proxy down                  | "the proxy answers, but no SSH service behind it"         |
+| Proxy down                                 | "the SSH service does not answer"                         |
+| Mount with the LAN address away            | mounted through the tunnel after 0.26 s, route "internet" |
+
+Open points: other common front ends (Nginx Proxy Manager, Caddy with the layer4 module, Traefik, HAProxy); reading through the tunnel could get a little faster with non-blocking pipes instead of tokio's standard input and output.

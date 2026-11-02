@@ -37,6 +37,7 @@ async fn main() {
         port: ssh_port,
         account: account.clone(),
         host_key: KnownHosts::new(paths.known_hosts()).get(&alias),
+        tunnel: None,
     };
 
     if std::env::args().nth(1).as_deref() == Some("remove") {
@@ -60,12 +61,13 @@ async fn main() {
         return;
     }
 
-    let host_key = scan_host_key(&host, ssh_port).await.unwrap();
+    let host_key = scan_host_key(&host, ssh_port, None).await.unwrap();
     KnownHosts::new(paths.known_hosts())
         .pin(&alias, &host_key)
         .unwrap();
     let target = Target {
         host_key: Some(host_key.clone()),
+        tunnel: None,
         ..target
     };
     let key = setup::key_pair(&paths, &device_id, &account).unwrap();
@@ -85,6 +87,7 @@ async fn main() {
         lan: Address {
             host,
             port: ssh_port,
+            tunnel: None,
         },
         internet: None,
         host_key_alias: alias,

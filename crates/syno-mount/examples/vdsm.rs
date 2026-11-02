@@ -82,7 +82,9 @@ async fn main() {
     };
     let device_id = format!("{host}:{https}");
     let alias = host_alias(&device_id);
-    let host_key = scan_host_key(&host, ssh_port).await.expect("host key");
+    let host_key = scan_host_key(&host, ssh_port, None)
+        .await
+        .expect("host key");
     KnownHosts::new(paths.known_hosts())
         .pin(&alias, &host_key)
         .unwrap();
@@ -91,6 +93,7 @@ async fn main() {
         port: ssh_port,
         account: account.clone(),
         host_key: Some(host_key.clone()),
+        tunnel: None,
     };
     let key = setup::key_pair(&paths, &device_id, &account).unwrap();
     let installed = setup::install_key(&target, &password, &key)
@@ -121,6 +124,7 @@ async fn main() {
         lan: Address {
             host: host.clone(),
             port: ssh_port,
+            tunnel: None,
         },
         internet: None,
         host_key_alias: alias,
@@ -134,7 +138,15 @@ async fn main() {
     syno_mount::manager::write_owner_maps(&paths, &mount).unwrap();
 
     let version = sshfs::installed_version().expect("sshfs");
-    let arguments = sshfs::arguments(&mount, &paths, &mount.lan, Route::Lan, version).unwrap();
+    let arguments = sshfs::arguments(
+        &mount,
+        &paths,
+        &mount.lan,
+        Route::Lan,
+        version,
+        &std::env::current_exe().unwrap(),
+    )
+    .unwrap();
     println!("{}", sshfs::display(&arguments));
     let mut child = Command::new("sshfs").args(&arguments).spawn().unwrap();
     let started = Instant::now();

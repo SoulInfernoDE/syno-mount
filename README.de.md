@@ -103,7 +103,7 @@ Dann `syno-mount-<version>-windows-x64-setup.exe` ausführen (installiert für d
 
 Dein eigenes `~/.ssh` bleibt unberührt. Unter Linux startet jeder Dienst `syno-mount run-mount <id>`, das die LAN- oder Internet-Adresse wählt und dann `sshfs` startet; unter Windows macht der Agent dasselbe mit `rclone mount`. Die App zeigt den vollständigen Befehl. Mehr in [docs/architecture.de.md](docs/architecture.de.md).
 
-**Über das Internet** braucht das NAS einen weitergeleiteten SSH-Port (besser nicht 22) oder ein VPN. QuickConnect leitet kein SSH weiter. Trage DDNS-Name und Port als Internet-Adresse eines Ordners ein.
+**Über das Internet** braucht das NAS einen weitergeleiteten SSH-Port (besser nicht 22), ein VPN oder (Linux, neu) einen **Reverse-Proxy auf Port 443**: „Über HTTPS“ neben der Internet-Adresse anhaken, dann läuft SSH Ende-zu-Ende in TLS, mit dem festgehaltenen Host-Key wie bisher. Der Proxy braucht ein paar Zeilen Konfiguration: [docs/https-tunnel.de.md](docs/https-tunnel.de.md). QuickConnect leitet kein SSH weiter. Trage DDNS-Name und Port als Internet-Adresse eines Ordners ein.
 
 ## Bauen
 

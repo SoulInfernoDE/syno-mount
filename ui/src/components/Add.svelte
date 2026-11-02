@@ -4,6 +4,7 @@
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import DsmSignIn from './DsmSignIn.svelte';
+  import InternetAddress from './InternetAddress.svelte';
   import NasPicker from './NasPicker.svelte';
   import SelfTest from './SelfTest.svelte';
   import {
@@ -17,11 +18,11 @@
     isWindows,
     listMounts,
     moreShares,
-    parseAddress,
     scanHostKey,
     selfTest,
     setupServices,
     toFailure,
+    type Address,
     type Check,
     type Failure,
     type HostKeyView,
@@ -166,8 +167,7 @@
   let folders = $state<Record<string, string>>({});
   let atLogin = $state(true);
   let bookmark = $state(true);
-  let internet = $state('');
-  const internetAddress = $derived(internet.trim() ? parseAddress(internet, 22) : undefined);
+  let internetAddress = $state<Address | null | undefined>(undefined);
   const chosen = $derived(
     installation?.shares.filter((share) => selected[share.name] && !share.mounted) ?? [],
   );
@@ -191,7 +191,7 @@
         })),
         atLogin,
         bookmark,
-        internet: internetAddress,
+        internet: internetAddress ?? undefined,
       }),
     );
     if (result) {
@@ -481,19 +481,7 @@
         </label>
       {/if}
       {#if !fromMount}
-        <label class="field">
-          <span>{t('folders-internet')}</span>
-          <input
-            class="input"
-            bind:value={internet}
-            placeholder={t('settings-internet-placeholder')}
-            spellcheck="false"
-            aria-invalid={internetAddress === null}
-          />
-          <span class="subtle">{t('settings-internet-hint')}</span>
-          {#if internetAddress === null}<span class="invalid">{t('settings-internet-invalid')}</span
-            >{/if}
-        </label>
+        <InternetAddress label={t('folders-internet')} bind:address={internetAddress} />
       {/if}
       {@render problem()}
       <div class="actions">
@@ -653,11 +641,6 @@
 
   .narrow {
     max-width: 8em;
-  }
-
-  .invalid {
-    color: var(--danger);
-    font-size: 0.92em;
   }
 
   .fingerprint {

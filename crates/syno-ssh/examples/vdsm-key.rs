@@ -18,13 +18,14 @@ async fn main() {
     let account = env("VDSM_USER");
     let password = env("VDSM_PASSWORD");
 
-    let host_key = scan_host_key(&host, port).await.expect("host key");
+    let host_key = scan_host_key(&host, port, None).await.expect("host key");
     println!("host key: {} {}", host_key.algorithm, host_key.fingerprint);
     let target = Target {
         host,
         port,
         account,
         host_key: Some(host_key),
+        tunnel: None,
     };
 
     // KEEP_KEY=<path> leaves the key at <path> installed, to try sshfs by hand.

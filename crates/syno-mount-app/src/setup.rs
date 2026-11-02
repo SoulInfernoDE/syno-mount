@@ -43,6 +43,7 @@ impl Pending {
             port: self.ssh.port,
             account: self.device.account.clone(),
             host_key: self.trusted.clone(),
+            tunnel: None,
         }
     }
 }
@@ -202,6 +203,7 @@ pub async fn connect(
         ssh: Address {
             host,
             port: ssh_port,
+            tunnel: None,
         },
         scanned: None,
         trusted: None,
@@ -265,6 +267,7 @@ pub async fn connect_ssh_only(
         ssh: Address {
             host,
             port: request.ssh_port,
+            tunnel: None,
         },
         scanned: None,
         trusted: None,
@@ -358,7 +361,7 @@ pub async fn scan_host_key(
     if let Some(port) = port {
         pending.ssh.port = port;
     }
-    let key = syno_ssh::scan_host_key(&pending.ssh.host, pending.ssh.port).await?;
+    let key = syno_ssh::scan_host_key(&pending.ssh.host, pending.ssh.port, None).await?;
     let pinned = KnownHosts::new(state.paths.known_hosts()).get(&host_alias(&pending.device.id));
     let known = pinned.as_ref() == Some(&key);
     let changed = pinned.is_some() && !known;
@@ -492,6 +495,7 @@ pub async fn more_shares(
         port: mount.lan.port,
         account: mount.account.clone(),
         host_key: host_key.clone(),
+        tunnel: None,
     };
     let key =
         syno_ssh::KeyPair::load_or_create(&mount.key_path, &core::key_comment(&mount.account))?;

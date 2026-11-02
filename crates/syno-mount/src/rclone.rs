@@ -137,10 +137,12 @@ mod tests {
         let lan = Address {
             host: "192.168.1.20".into(),
             port: 22,
+            tunnel: None,
         };
         let internet = Address {
             host: "nas.example.org".into(),
             port: 2222,
+            tunnel: None,
         };
         assert_eq!(known_hosts_name(&lan), "192.168.1.20");
         assert_eq!(known_hosts_name(&internet), "[nas.example.org]:2222");

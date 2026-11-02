@@ -41,6 +41,8 @@ Das Passwort liegt nur im Speicher, solange der Assistent offen ist.
 
 Der Dienst hat `Restart=on-failure`, systemd versucht es also alle 10 Sekunden erneut, solange das NAS weg ist.
 
+Eine Internet-Adresse kann **hinter einem Reverse-Proxy** liegen (`tunnel` in `mounts.json`). Dann heißt „erreichbar“: TLS zum Proxy und das SSH-Banner des NAS dahinter, und sshfs bekommt `ProxyCommand='<programm>' tunnel <id>`: `syno-mount tunnel` öffnet TLS mit dem ALPN-Protokoll `syno-mount-ssh` (rustls, ring) und verbindet es mit Standardein- und -ausgabe von ssh. Alles andere, auch der festgehaltene Host-Key, bleibt, wie es ist. Siehe [https-tunnel.de.md](https-tunnel.de.md).
+
 ## Agent
 
 Alle 5 Sekunden vergleicht der Agent die Zeit seit dem Start (`/proc/uptime`, zählt Standby mit) mit einer monotonen Uhr, die das nicht tut, und `/proc/net/route` mit dem letzten Stand. Nach Standby oder geänderten Routen, und ohnehin alle 30 Sekunden, prüft er jeden laufenden Ordner: Ein Mount, der nicht binnen 4 Sekunden antwortet, wird gelöst (`fusermount3 -uz`) und sein Dienst neu gestartet; ein Ordner auf der Internet-Adresse wechselt zurück, sobald das LAN wieder antwortet, und umgekehrt.

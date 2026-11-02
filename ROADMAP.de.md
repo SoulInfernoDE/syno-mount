@@ -89,6 +89,13 @@ Inzwischen getestet (Details in der [Testumgebung](docs/test-environment.de.md))
 - [ ] Windows: Assistent und Adminbereich im Fenster, Autostart bei der Anmeldung, Standby
 - [ ] Windows: WinFsp und rclone aus der App installieren (winget)
 
+## v0.7 – Hinter einem Reverse-Proxy
+
+- [x] HTTPS-Tunnel, Phase 1 (Linux): SSH in TLS zu einem Reverse-Proxy auf Port 443, weitergeleitet nach ALPN oder Name; Zertifikat gegen das System geprüft oder festgehalten; „Verbindung prüfen“ mit dem festgehaltenen Host-Key; gegen nginx vor Virtual DSM getestet ([Entwurf](docs/https-tunnel.de.md))
+- [ ] Phase 2: Windows, über einen lokalen Weiterleiter für rclone
+- [ ] Phase 3: Gerätezertifikate (mTLS), damit nur bekannte Computer SSH überhaupt erreichen
+- [ ] Phase 4: Proxy-Konfiguration zum Kopieren, für nginx, Traefik und HAProxy
+
 ## Später
 
 - [ ] **NFSv4.1**-Backend: echte UID/GID und Locking im LAN; über das Internet nur per VPN (zum Beispiel Tailscale aus dem Paket-Zentrum)

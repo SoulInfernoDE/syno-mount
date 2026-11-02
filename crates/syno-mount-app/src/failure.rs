@@ -39,13 +39,15 @@ impl From<syno_ssh::Error> for Failure {
     fn from(error: syno_ssh::Error) -> Self {
         use syno_ssh::Error;
         let detail = match &error {
-            Error::Network(message) | Error::Sftp(message) | Error::Io(message) => {
-                Some(message.clone())
-            }
-            Error::HostKeyUnknown { fingerprint } | Error::HostKeyChanged { fingerprint } => {
-                Some(fingerprint.clone())
-            }
-            Error::AuthFailed => None,
+            Error::Network(message)
+            | Error::Sftp(message)
+            | Error::Io(message)
+            | Error::Tls(message) => Some(message.clone()),
+            Error::HostKeyUnknown { fingerprint }
+            | Error::HostKeyChanged { fingerprint }
+            | Error::CertificateUntrusted { fingerprint }
+            | Error::CertificateChanged { fingerprint } => Some(fingerprint.clone()),
+            Error::AuthFailed | Error::NoSshBehindProxy => None,
         };
         Self::new(error.key(), detail)
     }
