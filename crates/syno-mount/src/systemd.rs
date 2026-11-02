@@ -124,7 +124,11 @@ pub fn start(name: &str) -> io::Result<()> {
 }
 
 pub fn stop(name: &str) -> io::Result<()> {
-    check(systemctl(&["stop", name]))
+    check(systemctl(&["stop", name]))?;
+    // sshfs exits with 1 on SIGTERM too, so a stopped mount would stay "failed":
+    // shown as failed, and the agent would start it again on the next event.
+    let _ = systemctl(&["reset-failed", name]);
+    Ok(())
 }
 
 pub fn restart(name: &str) -> io::Result<()> {
