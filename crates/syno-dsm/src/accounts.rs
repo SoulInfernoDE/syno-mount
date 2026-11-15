@@ -1,5 +1,6 @@
 //! The administrator's view: which DSM accounts may use SFTP and which shared
 //! folders they may open, and changing both. Every call needs an administrator.
+//! Also preparing an account's home folder for key login, as root.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -85,6 +86,70 @@ pub struct AccountShare {
     pub acl: bool,
     pub own: Permission,
     pub groups: Permission,
+}
+
+/// How preparing key login for an account ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "outcome", content = "exitCode")]
+pub enum KeyLoginPrepared {
+    Done,
+    /// The account has no home folder yet: DSM creates it at the first sign-in.
+    NoHome,
+    /// The script stopped with this exit code.
+    Failed(i64),
+}
+
+/// Exit codes of [`key_login_script`].
+const NO_HOME: i64 = 10;
+
+/// `word` for the shell: unchanged when it is plain, otherwise in single quotes.
+fn shell_word(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '@'));
+    if plain {
+        word.to_owned()
+    } else {
+        format!("'{}'", word.replace('\'', r"'\''"))
+    }
+}
+
+/// The commands that let OpenSSH take keys for `account`: DSM creates home
+/// folders with Windows ACLs, which show as 777 when they let others write, and
+/// sshd's `StrictModes` then ignores `authorized_keys`. The ACLs are removed from
+/// the home, `.ssh` and `authorized_keys`, which get 755, 700 and 600. Keys already
+/// in the file stay. The last line checks the result. Shown to the administrator
+/// before it runs.
+pub fn key_login_script(account: &str) -> Result<String, Error> {
+    if account.is_empty() || account.starts_with(['.', '-']) || account.contains(['/', '\n', '\0'])
+    {
+        return Err(Error::Unexpected(format!(
+            "not an account name: {account:?}"
+        )));
+    }
+    let name = shell_word(account);
+    Ok(format!(
+        "cd /var/services/homes/{name} || exit {NO_HOME}\n\
+         mkdir -p .ssh || exit 11\n\
+         touch .ssh/authorized_keys || exit 11\n\
+         synoacltool -del .\n\
+         synoacltool -del .ssh\n\
+         synoacltool -del .ssh/authorized_keys\n\
+         chown {name} .ssh .ssh/authorized_keys || exit 12\n\
+         chmod 755 . || exit 13\n\
+         chmod 700 .ssh || exit 13\n\
+         chmod 600 .ssh/authorized_keys || exit 13\n\
+         test \"$(stat -c %a . .ssh .ssh/authorized_keys | tr '\\n' ' ')\" = '755 700 600 ' || exit 14\n"
+    ))
+}
+
+pub(crate) fn prepared(exit_code: i64) -> KeyLoginPrepared {
+    match exit_code {
+        0 => KeyLoginPrepared::Done,
+        NO_HOME => KeyLoginPrepared::NoHome,
+        other => KeyLoginPrepared::Failed(other),
+    }
 }
 
 fn flag(item: &Value, key: &str) -> bool {
@@ -361,6 +426,24 @@ impl Client {
         .map(|_| ())
     }
 
+    /// Runs [`key_login_script`] for `account` once as root. `admin` and
+    /// `password` are the signed-in administrator's: DSM asks for the password
+    /// again before anything runs as root.
+    pub async fn prepare_key_login(
+        &self,
+        session: &Session,
+        admin: &str,
+        password: &str,
+        account: &str,
+    ) -> Result<KeyLoginPrepared, Error> {
+        let script = key_login_script(account)?;
+        let name = format!("Syno Mount key login {account}");
+        let code = self
+            .run_as_root(session, admin, password, &name, &script)
+            .await?;
+        Ok(prepared(code))
+    }
+
     /// Gives an account its own SFTP rule, or removes it with `None` so the rule for
     /// everyone applies again.
     pub async fn set_sftp(
@@ -476,6 +559,39 @@ mod tests {
         assert_eq!(
             (shares[2].own, shares[2].groups),
             (Permission::ReadWrite, Permission::None)
+        );
+    }
+
+    #[test]
+    fn writes_the_key_login_commands() {
+        let script = key_login_script("anna").unwrap();
+        let lines: Vec<&str> = script.lines().collect();
+        assert_eq!(lines[0], "cd /var/services/homes/anna || exit 10");
+        assert!(lines.contains(&"synoacltool -del .ssh/authorized_keys"));
+        assert!(lines.contains(&"chown anna .ssh .ssh/authorized_keys || exit 12"));
+        assert!(lines.contains(&"chmod 600 .ssh/authorized_keys || exit 13"));
+        assert_eq!(
+            lines.last().unwrap(),
+            &r#"test "$(stat -c %a . .ssh .ssh/authorized_keys | tr '\n' ' ')" = '755 700 600 ' || exit 14"#
+        );
+        // Names that the shell would read differently are quoted.
+        let odd = key_login_script("o'neil smith").unwrap();
+        assert!(odd.starts_with(r"cd /var/services/homes/'o'\''neil smith' || exit 10"));
+        assert_eq!(shell_word("anna.b-c_d@x"), "anna.b-c_d@x");
+        // Paths outside the homes are refused.
+        for bad in ["", "..", "-rf", "a/b", "a\nb"] {
+            assert!(key_login_script(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(prepared(0), KeyLoginPrepared::Done);
+        assert_eq!(prepared(10), KeyLoginPrepared::NoHome);
+        assert_eq!(prepared(14), KeyLoginPrepared::Failed(14));
+        assert_eq!(
+            serde_json::to_value(KeyLoginPrepared::Failed(14)).unwrap(),
+            json!({ "outcome": "failed", "exitCode": 14 })
+        );
+        assert_eq!(
+            serde_json::to_value(KeyLoginPrepared::Done).unwrap(),
+            json!({ "outcome": "done" })
         );
     }
 

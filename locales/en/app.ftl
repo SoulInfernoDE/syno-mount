@@ -321,6 +321,15 @@ admin-confirm-text = These changes are made on { $name } (Control Panel › Appl
 admin-change-sftp = { $account }: SFTP { $value }
 admin-change-share = { $account } on { $share }: { $value }
 admin-confirm = Change
+admin-key-login-title = Key login
+admin-key-login-text = If { -app-name } reports that the NAS refuses the key because of Windows ACLs on the home folder, prepare the account here. { -app-name } then runs a few commands once as root, through { -dsm }'s Task Scheduler, and deletes the task again.
+admin-key-login-prepare = Prepare key login…
+admin-key-login-done = Key login is prepared for { $account }. Run the assistant again with this account.
+admin-key-login-confirm-title = Prepare key login for { $account }?
+admin-key-login-confirm-text = These commands run once as root on { $name }. They remove the Windows ACLs from the home folder, .ssh and authorized_keys and set the permissions SSH insists on; keys in the file stay.
+admin-key-login-confirm-note = Afterwards the home folder uses Linux permissions (755: others may enter and read it, only the account writes) instead of Windows ACLs; files in it keep theirs.
+admin-key-login-password = Your administrator password ({ -dsm } asks for it again before anything runs as root)
+admin-key-login-run = Run as root
 
 ## This computer
 
@@ -385,6 +394,10 @@ error-ssh-network = The SSH service of the NAS does not answer. Is SFTP switched
 error-host-key-unknown = The host key of the NAS has not been trusted yet.
 error-host-key-changed = The host key of the NAS changed. { -app-name } does not connect until you trust the new key.
 error-ssh-auth-failed = The NAS refused the sign-in. Check the password, and that SFTP is allowed for this account (Control Panel › Application Privileges).
+error-key-refused-acl-home = The password works and the key is installed, but the NAS refuses to sign in with it: the home folder of this account has Windows ACLs that let others write, and SSH then ignores the key. An administrator has to prepare the account once: in { -app-name }, Accounts on the NAS › By account › Prepare key login (or the commands in the README).
+error-key-refused = The password works and the key is installed, but the NAS refuses to sign in with it. An administrator can check the SSH settings of the NAS.
+error-key-login-no-home = This account has no home folder yet. Turn on the user home service, sign in once with the account, then try again.
+error-key-login-failed = The commands on the NAS stopped with an error; the steps after it did not run.
 error-sftp = The NAS refused a file operation.
 error-proxy-tls = The TLS connection to the proxy failed.
 error-proxy-certificate-untrusted = The proxy's certificate is not trusted.

@@ -47,6 +47,7 @@ impl From<syno_ssh::Error> for Failure {
             | Error::HostKeyChanged { fingerprint }
             | Error::CertificateUntrusted { fingerprint }
             | Error::CertificateChanged { fingerprint } => Some(fingerprint.clone()),
+            Error::KeyRefused { modes, .. } => Some(modes.clone()),
             Error::AuthFailed | Error::NoSshBehindProxy => None,
         };
         Self::new(error.key(), detail)

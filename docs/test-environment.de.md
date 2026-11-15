@@ -27,6 +27,8 @@ Auf der VM: eine Freigabe `mounttest`, ein Konto mit Lese- und Schreibrecht dara
 set -a; . ./.env.vdsm; set +a
 cargo run -p syno-ssh --example vdsm-key      # Schlüssel installieren, damit anmelden, entfernen
 cargo run -p syno-mount --example vdsm    # + DSM, Freigaben, sshfs, Selbsttest, Geschwindigkeit
+cargo run -p syno-mount --example key-check   # Schlüssel installieren wie der Assistent, und warum er abgelehnt wird
+cargo run -p syno-dsm --example key-login     # „Schlüssel-Login vorbereiten“ für VDSM_USER (braucht VDSM_ADMIN_USER/_PASSWORD)
 ```
 
 Beide laufen in temporären Ordnern und entfernen den Schlüssel am Ende vom NAS. Das Beispiel `systemd` richtet einen echten Dienst auf diesem Computer ein und lässt ihn stehen, bis `… --example systemd remove` läuft.
@@ -84,6 +86,19 @@ Eine Synology-NAS mit DSM 7.4.1, verschlüsselten Freigaben auf SSD und einem ei
 | Windows, Stoppen                                           | `Z:` nach 1,5 s weg                                                                       |
 
 Unterwegs gefunden: Ein Selbsttest unter Windows konnte seinen leeren Testordner zurücklassen, solange rclone noch hochlud; das Aufräumen versucht es jetzt kurz erneut.
+
+## Home-Ordner mit Windows-ACL (Virtual DSM 7.4.1)
+
+Die Home-Ordner des Virtual DSM zeigen 711 und nehmen den Schlüssel an. Um das echte NAS nachzustellen, bekam ein frisches normales Konto `acltest` einen ACL-Eintrag, der allen das Schreiben erlaubt (`sudo synoacltool -add /var/services/homes/acltest everyone:*:allow:rwxpdDaARWc--:fd--`); danach zeigen Home-Ordner, `.ssh` und `authorized_keys` 777.
+
+| Test                                                | Ergebnis                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `key-check` mit der ACL                             | `key-refused-acl-home`, Detail „home 777, .ssh 777, authorized_keys 777“             |
+| `key-login` (Aufgabenplaner als root)               | `Done`; Home 755, `.ssh` 700, `authorized_keys` 600, keine ACL; keine Aufgabe übrig  |
+| `key-check` danach                                  | Schlüssel-Anmeldung geht                                                             |
+| `key-login` noch einmal auf dem vorbereiteten Konto | `Done` (`synoacltool -del` scheitert an einem Pfad ohne ACL, was das Skript zulässt) |
+| Falsches Administratorpasswort                      | DSM-Fehler 3121, angezeigt als „Konto oder Passwort ist falsch“; nichts angelegt     |
+| Konto ohne Home-Ordner                              | `NoHome` (Exit-Code 10)                                                              |
 
 ## Windows
 

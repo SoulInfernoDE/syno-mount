@@ -3,7 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use syno_dsm::{
-    Access, Account, AccountShare, AdminShare, Client, Permission, Services, Session, ShareAccess,
+    Access, Account, AccountShare, AdminShare, Client, KeyLoginPrepared, Permission, Services,
+    Session, ShareAccess,
 };
 use tauri::State;
 
@@ -174,6 +175,53 @@ pub async fn admin_enable_services(state: State<'_, AppState>) -> Result<Service
         .enable_services(&admin.session, current, &volume)
         .await?;
     Ok(admin.client.services(&admin.session).await?)
+}
+
+/// The commands "Prepare key login" runs as root for `account`, to show them
+/// before the administrator confirms.
+#[tauri::command]
+pub fn admin_key_login_script(account: String) -> Result<String, Failure> {
+    Ok(syno_dsm::key_login_script(&account)?)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyLoginRequest {
+    account: String,
+    /// The administrator's password, which DSM asks for again before anything runs
+    /// as root. Used for this one call and not kept.
+    password: String,
+}
+
+/// Removes the Windows ACLs from the account's home, `.ssh` and
+/// `authorized_keys`, so that SSH takes its key: once, as root, through DSM's Task
+/// Scheduler. The task is deleted afterwards.
+#[tauri::command]
+pub async fn admin_prepare_key_login(
+    request: KeyLoginRequest,
+    state: State<'_, AppState>,
+) -> Result<(), Failure> {
+    let admin = state.admin.lock().await;
+    let admin = admin
+        .as_ref()
+        .ok_or_else(|| Failure::new("not-connected", None))?;
+    let outcome = admin
+        .client
+        .prepare_key_login(
+            &admin.session,
+            &admin.device.account,
+            &request.password,
+            &request.account,
+        )
+        .await?;
+    match outcome {
+        KeyLoginPrepared::Done => Ok(()),
+        KeyLoginPrepared::NoHome => Err(Failure::new("key-login-no-home", None)),
+        KeyLoginPrepared::Failed(code) => Err(Failure::new(
+            "key-login-failed",
+            format!("exit code {code}"),
+        )),
+    }
 }
 
 #[tauri::command]

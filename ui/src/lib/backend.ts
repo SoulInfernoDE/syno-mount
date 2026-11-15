@@ -349,3 +349,9 @@ export const adminAccountAccess = (account: string) =>
 export const adminApply = (changes: AdminChanges) => invoke<void>('admin_apply', { changes });
 export const adminEnableServices = () => invoke<Services>('admin_enable_services');
 export const adminDisconnect = () => invoke<void>('admin_disconnect');
+/** The commands "Prepare key login" runs as root, shown before they run. */
+export const adminKeyLoginScript = (account: string) =>
+  invoke<string>('admin_key_login_script', { account });
+/** Runs them once through DSM's Task Scheduler; DSM asks for the password again. */
+export const adminPrepareKeyLogin = (account: string, password: string) =>
+  invoke<void>('admin_prepare_key_login', { request: { account, password } });

@@ -321,6 +321,15 @@ admin-confirm-text = Diese Änderungen werden auf { $name } vorgenommen (Systems
 admin-change-sftp = { $account }: SFTP { $value }
 admin-change-share = { $account } auf { $share }: { $value }
 admin-confirm = Ändern
+admin-key-login-title = Schlüssel-Login
+admin-key-login-text = Meldet { -app-name }, dass das NAS den Schlüssel wegen Windows-ACLs im Home-Ordner ablehnt, bereite das Konto hier vor. { -app-name } führt dann einige Befehle einmal als root über den Aufgabenplaner von { -dsm } aus und löscht die Aufgabe danach wieder.
+admin-key-login-prepare = Schlüssel-Login vorbereiten …
+admin-key-login-done = Der Schlüssel-Login für { $account } ist vorbereitet. Starte den Assistenten mit diesem Konto noch einmal.
+admin-key-login-confirm-title = Schlüssel-Login für { $account } vorbereiten?
+admin-key-login-confirm-text = Diese Befehle laufen einmal als root auf { $name }. Sie entfernen die Windows-ACLs von Home-Ordner, .ssh und authorized_keys und setzen die Rechte, die SSH verlangt; Schlüssel in der Datei bleiben erhalten.
+admin-key-login-confirm-note = Danach nutzt der Home-Ordner Linux-Rechte (755: andere dürfen ihn betreten und lesen, nur das Konto schreibt) statt Windows-ACLs; Dateien darin behalten ihre.
+admin-key-login-password = Dein Administratorpasswort ({ -dsm } fragt es noch einmal ab, bevor etwas als root läuft)
+admin-key-login-run = Als root ausführen
 
 ## Dieser Computer
 
@@ -385,6 +394,10 @@ error-ssh-network = Der SSH-Dienst des NAS antwortet nicht. Ist SFTP eingeschalt
 error-host-key-unknown = Dem Host-Key des NAS wurde noch nicht vertraut.
 error-host-key-changed = Der Host-Key des NAS hat sich geändert. { -app-name } verbindet sich erst, wenn du dem neuen Schlüssel vertraust.
 error-ssh-auth-failed = Das NAS hat die Anmeldung abgelehnt. Prüfe das Passwort und ob SFTP für dieses Konto erlaubt ist (Systemsteuerung › Anwendungsberechtigungen).
+error-key-refused-acl-home = Das Passwort stimmt und der Schlüssel ist installiert, aber das NAS lehnt die Anmeldung damit ab: Der Home-Ordner dieses Kontos hat Windows-ACLs, die anderen das Schreiben erlauben, und SSH ignoriert den Schlüssel dann. Ein Administrator muss das Konto einmal vorbereiten: in { -app-name } unter Konten auf dem NAS › Nach Konto › Schlüssel-Login vorbereiten (oder mit den Befehlen aus der README).
+error-key-refused = Das Passwort stimmt und der Schlüssel ist installiert, aber das NAS lehnt die Anmeldung damit ab. Ein Administrator kann die SSH-Einstellungen des NAS prüfen.
+error-key-login-no-home = Dieses Konto hat noch keinen Home-Ordner. Schalte den Benutzer-Home-Dienst ein, melde dich einmal mit dem Konto an und versuche es dann noch einmal.
+error-key-login-failed = Die Befehle auf dem NAS sind mit einem Fehler abgebrochen; die Schritte danach liefen nicht mehr.
 error-sftp = Das NAS hat einen Dateizugriff abgelehnt.
 error-proxy-tls = Die TLS-Verbindung zum Proxy ist fehlgeschlagen.
 error-proxy-certificate-untrusted = Dem Zertifikat des Proxys wird nicht vertraut.
