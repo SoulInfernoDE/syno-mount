@@ -137,13 +137,15 @@ pub fn probe(address: &Address, timeout: Duration) -> Result<Duration, String> {
         .to_socket_addrs()
         .map_err(|error| format!("cannot resolve {}: {error}", address.host))?
         .collect();
-    let mut last = format!("{} has no address", address.host);
+    // Each address its own reason: a name with IPv6 and IPv4 often fails
+    // differently on each, and the difference is the hint.
+    let mut reasons = Vec::new();
     for target in targets {
         let started = Instant::now();
         let mut stream = match TcpStream::connect_timeout(&target, timeout) {
             Ok(stream) => stream,
             Err(error) => {
-                last = format!("{target}: {error}");
+                reasons.push(format!("{target}: {error}"));
                 continue;
             }
         };
@@ -153,19 +155,26 @@ pub fn probe(address: &Address, timeout: Duration) -> Result<Duration, String> {
         let mut banner = [0u8; 4];
         match stream.read_exact(&mut banner) {
             Ok(()) if &banner == b"SSH-" => return Ok(latency),
-            Ok(()) => last = format!("{target} answers, but not with SSH"),
+            Ok(()) => reasons.push(format!("{target} answers, but not with SSH")),
             Err(error)
                 if matches!(
                     error.kind(),
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) =>
             {
-                last = format!("{target} accepts, but sends no SSH banner in time");
+                reasons.push(format!("{target} accepts, but sends no SSH banner in time"));
             }
-            Err(error) => last = format!("{target} accepts, but sends no SSH banner ({error})"),
+            Err(error) => {
+                reasons.push(format!(
+                    "{target} accepts, but sends no SSH banner ({error})"
+                ));
+            }
         }
     }
-    Err(last)
+    if reasons.is_empty() {
+        return Err(format!("{} has no address", address.host));
+    }
+    Err(reasons.join(", "))
 }
 
 /// The address to use now: the LAN one when SSH answers there, else the internet
