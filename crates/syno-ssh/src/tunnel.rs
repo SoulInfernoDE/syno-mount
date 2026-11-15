@@ -172,10 +172,20 @@ fn prepare(tunnel: &Tunnel) -> Result<Prepared, Error> {
 
 /// Turns a failed handshake into an error that names the certificate.
 fn handshake_error(prepared: &Prepared, error: &std::io::Error) -> Error {
-    let refused = error
+    let tls = error
         .get_ref()
-        .and_then(|inner| inner.downcast_ref::<rustls::Error>())
-        .is_some_and(|tls| matches!(tls, rustls::Error::InvalidCertificate(_)));
+        .and_then(|inner| inner.downcast_ref::<rustls::Error>());
+    // A web server that does not know the ALPN protocol refuses it outright: the
+    // proxy answers, but does not pass Syno Mount on to SSH.
+    if matches!(
+        tls,
+        Some(rustls::Error::AlertReceived(
+            rustls::AlertDescription::NoApplicationProtocol
+        ))
+    ) {
+        return Error::NoSshBehindProxy;
+    }
+    let refused = tls.is_some_and(|tls| matches!(tls, rustls::Error::InvalidCertificate(_)));
     let seen = prepared.seen.lock().ok().and_then(|seen| seen.clone());
     match (refused, seen) {
         (true, Some(fingerprint)) if prepared.pinned.is_some() => {
