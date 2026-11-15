@@ -3,6 +3,7 @@
   import InternetAddress from './InternetAddress.svelte';
   import SelfTest from './SelfTest.svelte';
   import {
+    checkAddress,
     commandLine,
     isWindows,
     removeMount,
@@ -214,7 +215,7 @@
       <InternetAddress
         label={t('settings-internet')}
         initial={mount.internet}
-        mountId={mount.id}
+        check={(address) => checkAddress(mount.id, address)}
         bind:address={internetAddress}
       />
       <label class="field">

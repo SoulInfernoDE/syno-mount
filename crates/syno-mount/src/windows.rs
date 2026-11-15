@@ -254,7 +254,13 @@ struct Running {
 }
 
 fn spawn(paths: &Paths, mount: &Mount, rclone: &Path) -> Option<Running> {
-    let (route, address) = status::choose(mount, PROBE_TIMEOUT)?;
+    let (route, address) = match status::choose(mount, PROBE_TIMEOUT) {
+        Ok(choice) => choice,
+        Err(reason) => {
+            let _ = std::fs::write(log_file(paths, &mount.id), format!("{reason}\n"));
+            return None;
+        }
+    };
     let log = File::create(log_file(paths, &mount.id)).ok()?;
     let mut arguments = rclone::arguments(mount, paths, &address);
     arguments.extend(["--log-level".into(), "NOTICE".into()]);

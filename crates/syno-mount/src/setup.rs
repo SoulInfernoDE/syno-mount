@@ -82,13 +82,9 @@ pub async fn inspect(target: &Target, key: &KeyPair) -> Result<Installed, syno_s
 }
 
 /// Removes the app's key from the NAS, signing in with that key.
-pub async fn remove_key(
-    target: &Target,
-    key: &KeyPair,
-    account: &str,
-) -> Result<(), syno_ssh::Error> {
+pub async fn remove_key(target: &Target, key: &KeyPair) -> Result<(), syno_ssh::Error> {
     let sftp = syno_ssh::connect(target, Login::Key(&key.key)).await?;
-    sftp.remove_key(&key_comment(account)).await
+    sftp.remove_key(&key.authorized_line()).await
 }
 
 /// Everything about a NAS that all its mounts share.

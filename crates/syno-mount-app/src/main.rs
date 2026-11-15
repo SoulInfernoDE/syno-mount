@@ -116,6 +116,7 @@ fn main() -> ExitCode {
             setup::more_shares,
             setup::create_mounts,
             setup::cancel_setup,
+            setup::setup_check_address,
             mounts::system_check,
             mounts::list_mounts,
             mounts::start_mount,

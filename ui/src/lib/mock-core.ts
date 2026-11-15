@@ -417,6 +417,7 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
   self_test: async () => (await wait(1200), checks),
   speed_test: async () => (await wait(1500), speed),
   open_folder: async () => undefined,
+  setup_check_address: async (args) => commands.check_address!({ address: args.address }),
   check_address: async (args) => {
     const address = args.address as Address;
     await new Promise((resolve) => setTimeout(resolve, 400));

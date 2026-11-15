@@ -52,7 +52,7 @@ async fn main() {
             store.remove(&mount.id).unwrap();
             manager::remove(&paths, &mount, &store).unwrap();
             let key = syno_ssh::KeyPair::load_or_create(&mount.key_path, "").unwrap();
-            setup::remove_key(&target, &key, &account).await.unwrap();
+            setup::remove_key(&target, &key).await.unwrap();
             let _ = std::fs::remove_file(&mount.key_path);
             let _ = std::fs::remove_file(mount.key_path.with_extension("pub"));
             println!("removed {}", mount.id);

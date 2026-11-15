@@ -1,6 +1,7 @@
 //! Is a mount there, does it answer, and which address does it use.
 
 use std::fs;
+use std::io::Read;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -101,7 +102,12 @@ pub fn answers(path: &Path, timeout: Duration) -> bool {
     receiver.recv_timeout(timeout).unwrap_or(false)
 }
 
+/// Time each step of the internet probe may take: TLS through a proxy over a slow
+/// line needs more than the LAN.
+pub const INTERNET_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Time to open a TCP connection, or `None` when nothing answers within `timeout`.
+/// Cheap enough for the status page; [`probe`] checks that SSH answers.
 pub fn reach(address: &Address, timeout: Duration) -> Option<Duration> {
     if let Some(tunnel) = &address.tunnel {
         // The proxy answering is not enough: the NAS behind it has to.
@@ -119,17 +125,59 @@ pub fn reach(address: &Address, timeout: Duration) -> Option<Duration> {
     None
 }
 
-/// The address to use now: the LAN one when it answers, else the internet one.
-pub fn choose(mount: &Mount, timeout: Duration) -> Option<(Route, Address)> {
-    if reach(&mount.lan, timeout).is_some() {
-        return Some((Route::Lan, mount.lan.clone()));
+/// Whether an SSH service answers at `address`, or why not. A port that only
+/// accepts TCP is not enough: in a foreign network another device may have the
+/// same private address.
+pub fn probe(address: &Address, timeout: Duration) -> Result<Duration, String> {
+    if let Some(tunnel) = &address.tunnel {
+        return syno_ssh::tunnel::probe(&address.host, address.port, tunnel, timeout)
+            .map_err(|error| error.to_string());
     }
-    let internet = mount.internet.as_ref()?;
+    let targets: Vec<_> = (address.host.as_str(), address.port)
+        .to_socket_addrs()
+        .map_err(|error| format!("cannot resolve {}: {error}", address.host))?
+        .collect();
+    let mut last = format!("{} has no address", address.host);
+    for target in targets {
+        let started = Instant::now();
+        let mut stream = match TcpStream::connect_timeout(&target, timeout) {
+            Ok(stream) => stream,
+            Err(error) => {
+                last = format!("{target}: {error}");
+                continue;
+            }
+        };
+        let latency = started.elapsed();
+        let _ = stream.set_read_timeout(Some(timeout));
+        let mut banner = [0u8; 4];
+        match stream.read_exact(&mut banner) {
+            Ok(()) if &banner == b"SSH-" => return Ok(latency),
+            Ok(()) => last = format!("{target} answers, but not with SSH"),
+            Err(error) => last = format!("{target} accepts, but sends no SSH banner ({error})"),
+        }
+    }
+    Err(last)
+}
+
+/// The address to use now: the LAN one when SSH answers there, else the internet
+/// one. Says for each address why it was not taken.
+pub fn choose(mount: &Mount, lan_timeout: Duration) -> Result<(Route, Address), String> {
+    let lan = match probe(&mount.lan, lan_timeout) {
+        Ok(_) => return Ok((Route::Lan, mount.lan.clone())),
+        Err(error) => format!("LAN {}: {error}", mount.lan.label()),
+    };
+    let Some(internet) = &mount.internet else {
+        return Err(format!("{lan}; no internet address is set"));
+    };
     // rclone cannot use the tunnel yet (phase 2 of the HTTPS tunnel).
     if cfg!(windows) && internet.tunnel.is_some() {
-        return None;
+        return Err(format!(
+            "{lan}; the internet address is behind a proxy, which Windows cannot use yet"
+        ));
     }
-    reach(internet, timeout).map(|_| (Route::Internet, internet.clone()))
+    probe(internet, INTERNET_TIMEOUT)
+        .map(|_| (Route::Internet, internet.clone()))
+        .map_err(|error| format!("{lan}; internet {}: {error}", internet.label()))
 }
 
 /// What `run-mount` noted when it started sshfs.
@@ -207,6 +255,45 @@ mod tests {
             tunnel: None,
         };
         assert_eq!(reach(&address, Duration::from_millis(300)), None);
+        let reason = probe(&address, Duration::from_millis(300)).unwrap_err();
+        assert!(reason.starts_with("127.0.0.1:9: "), "{reason}");
+    }
+
+    #[test]
+    fn wants_ssh_not_just_an_open_port() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            use std::io::Write;
+            let (mut web, _) = listener.accept().unwrap();
+            web.write_all(b"HTTP/1.1 400 Bad Request\r\n").unwrap();
+            let (mut ssh, _) = listener.accept().unwrap();
+            ssh.write_all(b"SSH-2.0-OpenSSH_8.2\r\n").unwrap();
+        });
+        let address = Address {
+            host: "127.0.0.1".into(),
+            port,
+            tunnel: None,
+        };
+        let reason = probe(&address, Duration::from_secs(2)).unwrap_err();
+        assert!(reason.ends_with("answers, but not with SSH"), "{reason}");
+        assert!(probe(&address, Duration::from_secs(2)).is_ok());
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn says_why_no_address_was_taken() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mount = crate::config::tests::sample(dir.path());
+        mount.lan = Address {
+            host: "127.0.0.1".into(),
+            port: 9,
+            tunnel: None,
+        };
+        mount.internet = None;
+        let reason = choose(&mount, Duration::from_millis(300)).unwrap_err();
+        assert!(reason.starts_with("LAN 127.0.0.1:9: "), "{reason}");
+        assert!(reason.ends_with("no internet address is set"), "{reason}");
     }
 
     #[test]

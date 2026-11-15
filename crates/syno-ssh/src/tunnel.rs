@@ -23,6 +23,9 @@ use crate::Error;
 /// The ALPN protocol the proxy routes on.
 pub const ALPN: &[u8] = b"syno-mount-ssh";
 
+/// Time for TCP and TLS to one address of the proxy in [`connect`].
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Large buffers keep the copying out of the way of SFTP's big reads and writes.
 const BUFFER: usize = 256 * 1024;
 
@@ -189,14 +192,45 @@ pub async fn connect(
     tunnel: &Tunnel,
 ) -> Result<TlsStream<tokio::net::TcpStream>, Error> {
     let prepared = prepare(tunnel)?;
-    let tcp = tokio::net::TcpStream::connect((host, port))
+    let targets = tokio::net::lookup_host((host, port))
         .await
-        .map_err(|error| Error::Network(error.to_string()))?;
-    let _ = tcp.set_nodelay(true);
-    TlsConnector::from(prepared.config.clone())
-        .connect(prepared.server_name.clone(), tcp)
-        .await
-        .map_err(|error| handshake_error(&prepared, &error))
+        .map_err(|error| Error::Network(format!("cannot resolve {host}: {error}")))?;
+    // A name often has an IPv6 and an IPv4 address and only one of them leads
+    // to the proxy: try them in turn.
+    let mut errors = Vec::new();
+    for target in targets {
+        let attempt = async {
+            let tcp = tokio::net::TcpStream::connect(target)
+                .await
+                .map_err(|error| Error::Network(format!("{target}: {error}")))?;
+            let _ = tcp.set_nodelay(true);
+            TlsConnector::from(prepared.config.clone())
+                .connect(prepared.server_name.clone(), tcp)
+                .await
+                .map_err(|error| handshake_error(&prepared, &error))
+        };
+        match tokio::time::timeout(CONNECT_TIMEOUT, attempt).await {
+            Ok(Ok(stream)) => return Ok(stream),
+            Ok(Err(error)) => errors.push(error),
+            Err(_) => errors.push(Error::Network(format!("{target}: timed out"))),
+        }
+    }
+    Err(most_telling(errors, host))
+}
+
+/// Of the errors from several addresses, the one that says most: a certificate
+/// problem or a proxy without SSH behind it beats an address that did not answer.
+fn most_telling(errors: Vec<Error>, host: &str) -> Error {
+    let rank = |error: &Error| match error {
+        Error::CertificateChanged { .. } | Error::CertificateUntrusted { .. } => 0,
+        Error::NoSshBehindProxy => 1,
+        Error::Tls(_) => 2,
+        _ => 3,
+    };
+    errors
+        .into_iter()
+        .min_by_key(rank)
+        .unwrap_or_else(|| Error::Network(format!("{host} has no address")))
 }
 
 /// Connects stdin and stdout to the SSH service behind the proxy: the
@@ -216,54 +250,63 @@ pub fn probe(host: &str, port: u16, tunnel: &Tunnel, timeout: Duration) -> Resul
     let prepared = prepare(tunnel)?;
     let targets = (host, port)
         .to_socket_addrs()
-        .map_err(|error| Error::Network(error.to_string()))?;
-    let mut last = Error::Network(format!("{host} has no address"));
+        .map_err(|error| Error::Network(format!("cannot resolve {host}: {error}")))?;
+    let mut errors = Vec::new();
     for target in targets {
-        let started = Instant::now();
-        let tcp = match TcpStream::connect_timeout(&target, timeout) {
-            Ok(tcp) => tcp,
-            Err(error) => {
-                last = Error::Network(error.to_string());
-                continue;
-            }
-        };
-        let latency = started.elapsed();
-        tcp.set_read_timeout(Some(timeout))?;
-        tcp.set_write_timeout(Some(timeout))?;
-        let connection =
-            rustls::ClientConnection::new(prepared.config.clone(), prepared.server_name.clone())
-                .map_err(|error| Error::Tls(error.to_string()))?;
-        let mut tls = rustls::StreamOwned::new(connection, tcp);
-        let mut banner = [0u8; 8];
-        let mut read = 0;
-        while read < 4 {
-            match tls.read(&mut banner[read..]) {
-                Ok(0) => return Err(Error::NoSshBehindProxy),
-                Ok(count) => read += count,
-                Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
-                    return Err(handshake_error(&prepared, &error));
-                }
-                Err(error)
-                    if matches!(
-                        error.kind(),
-                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                    ) && tls.conn.is_handshaking() =>
-                {
-                    return Err(Error::Network("the proxy does not answer".into()));
-                }
-                Err(_) if !tls.conn.is_handshaking() => return Err(Error::NoSshBehindProxy),
-                Err(error) => return Err(Error::Network(error.to_string())),
-            }
+        match probe_one(&prepared, target, timeout) {
+            Ok(latency) => return Ok(latency),
+            Err(error) => errors.push(error),
         }
-        if !banner.starts_with(b"SSH-") {
-            return Err(Error::NoSshBehindProxy);
-        }
-        // Say goodbye properly, so that the proxy's log does not show an error.
-        tls.conn.send_close_notify();
-        let _ = tls.flush();
-        return Ok(latency);
     }
-    Err(last)
+    Err(most_telling(errors, host))
+}
+
+/// [`probe`] for one address of the proxy.
+fn probe_one(
+    prepared: &Prepared,
+    target: std::net::SocketAddr,
+    timeout: Duration,
+) -> Result<Duration, Error> {
+    let started = Instant::now();
+    let tcp = TcpStream::connect_timeout(&target, timeout)
+        .map_err(|error| Error::Network(format!("{target}: {error}")))?;
+    let latency = started.elapsed();
+    tcp.set_read_timeout(Some(timeout))?;
+    tcp.set_write_timeout(Some(timeout))?;
+    let connection =
+        rustls::ClientConnection::new(prepared.config.clone(), prepared.server_name.clone())
+            .map_err(|error| Error::Tls(error.to_string()))?;
+    let mut tls = rustls::StreamOwned::new(connection, tcp);
+    let mut banner = [0u8; 8];
+    let mut read = 0;
+    while read < 4 {
+        match tls.read(&mut banner[read..]) {
+            Ok(0) => return Err(Error::NoSshBehindProxy),
+            Ok(count) => read += count,
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                return Err(handshake_error(prepared, &error));
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) && tls.conn.is_handshaking() =>
+            {
+                return Err(Error::Network(format!(
+                    "{target}: the proxy does not answer"
+                )));
+            }
+            Err(_) if !tls.conn.is_handshaking() => return Err(Error::NoSshBehindProxy),
+            Err(error) => return Err(Error::Network(format!("{target}: {error}"))),
+        }
+    }
+    if !banner.starts_with(b"SSH-") {
+        return Err(Error::NoSshBehindProxy);
+    }
+    // Say goodbye properly, so that the proxy's log does not show an error.
+    tls.conn.send_close_notify();
+    let _ = tls.flush();
+    Ok(latency)
 }
 
 #[cfg(test)]
@@ -294,6 +337,25 @@ mod tests {
         );
         tunnel.alpn = false;
         assert!(prepare(&tunnel).unwrap().config.alpn_protocols.is_empty());
+    }
+
+    #[test]
+    fn reports_the_most_telling_error() {
+        let errors = vec![
+            Error::Network("[2001:db8::1]:443: unreachable".into()),
+            Error::CertificateUntrusted {
+                fingerprint: "SHA256:AB".into(),
+            },
+            Error::NoSshBehindProxy,
+        ];
+        assert_eq!(
+            most_telling(errors, "nas.example.org").key(),
+            "proxy-certificate-untrusted"
+        );
+        assert_eq!(
+            most_telling(Vec::new(), "nas.example.org").to_string(),
+            "cannot reach the SSH service: nas.example.org has no address"
+        );
     }
 
     #[test]

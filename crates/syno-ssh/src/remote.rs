@@ -67,12 +67,26 @@ pub(crate) fn with_key(text: &str, line: &str) -> String {
     lines.join("\n") + "\n"
 }
 
-/// Removes the lines of the key with `comment` from `text`.
-pub(crate) fn without_key(text: &str, comment: &str) -> String {
+/// The key itself in an `authorized_keys` line: the base64 after the type. Options
+/// in front (`restrict,… ssh-ed25519 AAAA…`) are skipped.
+fn key_blob(line: &str) -> Option<&str> {
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    let kind = fields
+        .iter()
+        .position(|field| field.starts_with("ssh-") || field.starts_with("ecdsa-"))?;
+    fields.get(kind + 1).copied()
+}
+
+/// Removes the lines of the key in `line` from `text`. Matched by the key itself,
+/// not the comment: two computers with the same name keep their own keys.
+pub(crate) fn without_key(text: &str, line: &str) -> String {
+    let Some(ours) = key_blob(line) else {
+        return text.to_owned();
+    };
     let kept: Vec<&str> = text
         .lines()
         .filter(|line| !line.trim().is_empty())
-        .filter(|line| line.split_whitespace().nth(2) != Some(comment))
+        .filter(|line| key_blob(line) != Some(ours))
         .collect();
     if kept.is_empty() {
         String::new()
@@ -220,15 +234,16 @@ impl Sftp {
         Ok(())
     }
 
-    /// Removes the key with `comment` from `~/.ssh/authorized_keys`.
-    pub async fn remove_key(&self, comment: &str) -> Result<(), Error> {
+    /// Removes the key of `line` (an `authorized_keys` line) from
+    /// `~/.ssh/authorized_keys`.
+    pub async fn remove_key(&self, line: &str) -> Result<(), Error> {
         let home = self.home().await?;
         let file = format!("{}/.ssh/authorized_keys", home.trim_end_matches('/'));
         if !self.session.try_exists(&file).await? {
             return Ok(());
         }
         let current = String::from_utf8_lossy(&self.session.read(&file).await?).into_owned();
-        let next = without_key(&current, comment);
+        let next = without_key(&current, line);
         if next != current {
             self.write_file(&file, next.as_bytes()).await?;
         }
@@ -254,15 +269,18 @@ mod tests {
     #[test]
     fn removes_only_its_own_key() {
         let text = format!("{THEIRS}\n{OURS}\n");
+        assert_eq!(without_key(&text, OURS), format!("{THEIRS}\n"));
+        assert_eq!(without_key(&format!("{OURS}\n"), OURS), "");
+        // Another computer with the same name and account keeps its key.
+        let twin = "ssh-ed25519 AAAAtwin syno-mount:anna@laptop";
         assert_eq!(
-            without_key(&text, "syno-mount:anna@laptop"),
-            format!("{THEIRS}\n")
+            without_key(&format!("{twin}\n{OURS}\n"), OURS),
+            format!("{twin}\n")
         );
-        assert_eq!(
-            without_key(&format!("{OURS}\n"), "syno-mount:anna@laptop"),
-            ""
-        );
-        assert_eq!(without_key(&text, "syno-mount:other"), text);
+        // Options in front of the key do not hide it.
+        let restricted = format!("restrict {OURS}");
+        assert_eq!(without_key(&format!("{restricted}\n"), OURS), "");
+        assert_eq!(without_key(&text, "not a key"), text);
     }
 
     #[test]

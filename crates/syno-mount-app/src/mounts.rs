@@ -117,6 +117,15 @@ pub async fn check_address(
     let pinned = KnownHosts::new(state.paths.known_hosts())
         .get(&mount.host_key_alias)
         .ok_or_else(|| Failure::new("host-key-unknown", None))?;
+    verify_address(address, pinned).await
+}
+
+/// The check behind [`check_address`], also used by the assistant before a mount
+/// exists.
+pub(crate) async fn verify_address(
+    address: Address,
+    pinned: syno_ssh::HostKey,
+) -> Result<AddressCheck, Failure> {
     if let Some(tunnel) = address.tunnel.clone() {
         // The probe tells apart the proxy, its certificate and the NAS behind it.
         let address = address.clone();
@@ -125,7 +134,7 @@ pub async fn check_address(
                 &address.host,
                 address.port,
                 &tunnel,
-                std::time::Duration::from_secs(5),
+                syno_mount::status::INTERNET_TIMEOUT,
             )?)
         })
         .await?;
@@ -163,11 +172,30 @@ pub async fn update_mount(
         .internet
         .filter(|address| !address.host.trim().is_empty());
     mount.tuning = settings.tuning;
-    state
-        .mounts
-        .lock()
-        .map_err(|_| Failure::new("storage", None))?
-        .upsert(mount.clone())?;
+    {
+        let mut store = state
+            .mounts
+            .lock()
+            .map_err(|_| Failure::new("storage", None))?;
+        // The internet address belongs to the NAS: the other folders of the same
+        // NAS and account take it over, or they would stay without one.
+        let siblings: Vec<Mount> = store
+            .all()
+            .iter()
+            .filter(|other| {
+                other.id != mount.id
+                    && other.device_id == mount.device_id
+                    && other.account == mount.account
+                    && other.internet != mount.internet
+            })
+            .cloned()
+            .collect();
+        for mut sibling in siblings {
+            sibling.internet = mount.internet.clone();
+            store.upsert(sibling)?;
+        }
+        store.upsert(mount.clone())?;
+    }
     let paths = state.paths.clone();
     let applied = mount.clone();
     blocking(move || {
@@ -214,15 +242,25 @@ pub async fn remove_mount(
 
     if remove_key && !others_use_key {
         let known = KnownHosts::new(state.paths.known_hosts());
+        // Away from home the key goes over the internet address, the tunnel too.
+        let chosen = mount.clone();
+        let address = blocking(move || {
+            Ok(
+                syno_mount::status::choose(&chosen, std::time::Duration::from_millis(1500))
+                    .map(|(_, address)| address)
+                    .unwrap_or_else(|_| chosen.lan.clone()),
+            )
+        })
+        .await?;
         let target = Target {
-            host: mount.lan.host.clone(),
-            port: mount.lan.port,
+            host: address.host.clone(),
+            port: address.port,
             account: mount.account.clone(),
             host_key: known.get(&mount.host_key_alias),
-            tunnel: None,
+            tunnel: address.tunnel.clone(),
         };
         if let Ok(key) = KeyPair::load_or_create(&mount.key_path, "") {
-            syno_mount::setup::remove_key(&target, &key, &mount.account).await?;
+            syno_mount::setup::remove_key(&target, &key).await?;
         }
         let _ = std::fs::remove_file(&mount.key_path);
         let _ = std::fs::remove_file(mount.key_path.with_extension("pub"));
