@@ -154,6 +154,14 @@ pub fn probe(address: &Address, timeout: Duration) -> Result<Duration, String> {
         match stream.read_exact(&mut banner) {
             Ok(()) if &banner == b"SSH-" => return Ok(latency),
             Ok(()) => last = format!("{target} answers, but not with SSH"),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                last = format!("{target} accepts, but sends no SSH banner in time");
+            }
             Err(error) => last = format!("{target} accepts, but sends no SSH banner ({error})"),
         }
     }
