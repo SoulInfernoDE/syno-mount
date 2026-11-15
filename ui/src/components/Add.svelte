@@ -9,6 +9,7 @@
   import SelfTest from './SelfTest.svelte';
   import {
     cancelSetup,
+    checkSetupAddress,
     connect,
     connectSshOnly,
     createMounts,
@@ -481,7 +482,11 @@
         </label>
       {/if}
       {#if !fromMount}
-        <InternetAddress label={t('folders-internet')} bind:address={internetAddress} />
+        <InternetAddress
+          label={t('folders-internet')}
+          check={checkSetupAddress}
+          bind:address={internetAddress}
+        />
       {/if}
       {@render problem()}
       <div class="actions">

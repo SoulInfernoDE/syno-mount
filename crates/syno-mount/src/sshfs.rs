@@ -157,7 +157,9 @@ pub fn arguments(
     }
     arguments.push(format!(
         "{}@{}:{}",
-        mount.account, address.host, mount.remote_path
+        mount.account,
+        address.ssh_host(),
+        mount.remote_path
     ));
     arguments.push(checked(&mount.local_path)?);
     Ok(arguments)
@@ -297,6 +299,28 @@ mod tests {
         program: &Path,
     ) -> Result<Vec<String>, String> {
         arguments(mount, paths, address, Route::Internet, (3, 7, 3), program)
+    }
+
+    #[test]
+    fn puts_ipv6_addresses_in_brackets() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::with_home(dir.path().to_owned());
+        let mount = sample(dir.path());
+        let internet = Address {
+            host: "2001:db8::5".into(),
+            port: 2222,
+            tunnel: None,
+        };
+        let arguments = arguments(
+            &mount,
+            &paths,
+            &internet,
+            Route::Internet,
+            (3, 7, 3),
+            Path::new(PROGRAM),
+        )
+        .unwrap();
+        assert!(arguments.contains(&"anna@[2001:db8::5]:/Media".to_owned()));
     }
 
     #[test]

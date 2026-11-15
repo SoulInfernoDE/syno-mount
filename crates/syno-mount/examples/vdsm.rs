@@ -189,8 +189,6 @@ async fn main() {
         .status()
         .unwrap();
     let _ = child.wait();
-    setup::remove_key(&target, &key, &account)
-        .await
-        .expect("remove key");
+    setup::remove_key(&target, &key).await.expect("remove key");
     println!("done; key removed from the NAS");
 }

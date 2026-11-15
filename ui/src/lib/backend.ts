@@ -251,6 +251,9 @@ export const backdrop = () => invoke<string | null>('backdrop');
 export const setWindowTheme = (dark: boolean) => invoke<void>('set_window_theme', { dark });
 export const checkAddress = (id: string, address: Address) =>
   invoke<AddressCheck>('check_address', { id, address });
+/** The same check in the assistant, against the host key trusted there. */
+export const checkSetupAddress = (address: Address) =>
+  invoke<AddressCheck>('setup_check_address', { address });
 
 /** "nas.local:5001", "192.168.1.20" or "[fe80::1]:5001" → host and port. */
 export function parseAddress(
@@ -260,7 +263,9 @@ export function parseAddress(
   let text = input
     .trim()
     .replace(/^(https?|ssh|sftp):\/\//i, '')
-    .replace(/\/.*$/, '');
+    .replace(/\/.*$/, '')
+    // "anna@nas.example.org": the account is chosen elsewhere.
+    .replace(/^[^@[\]]*@/, '');
   if (!text) return null;
   let port = defaultPort;
   const bracketed = /^\[([^\]]+)\](?::(\d+))?$/.exec(text);

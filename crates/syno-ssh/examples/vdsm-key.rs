@@ -56,7 +56,7 @@ async fn main() {
     if keep.is_some() {
         return;
     }
-    sftp.remove_key("syno-mount:example")
+    sftp.remove_key(&key.authorized_line())
         .await
         .expect("remove key");
     drop(sftp);

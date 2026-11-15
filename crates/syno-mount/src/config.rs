@@ -20,6 +20,22 @@ pub struct Address {
     pub tunnel: Option<Tunnel>,
 }
 
+impl Address {
+    /// The host as ssh and sshfs take it: an IPv6 address in brackets.
+    pub fn ssh_host(&self) -> String {
+        if self.host.contains(':') && !self.host.starts_with('[') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        }
+    }
+
+    /// "nas.example.org:2222", "[2001:db8::5]:22", for messages.
+    pub fn label(&self) -> String {
+        format!("{}:{}", self.ssh_host(), self.port)
+    }
+}
+
 /// How eagerly directory listings are cached.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

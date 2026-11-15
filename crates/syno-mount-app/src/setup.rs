@@ -48,6 +48,36 @@ impl Pending {
     }
 }
 
+/// The internet address already set for another folder of this NAS, so that a
+/// new folder gets it too.
+fn known_internet(state: &AppState, device_id: &str, account: &str) -> Option<Address> {
+    let store = state.mounts.lock().ok()?;
+    store
+        .all()
+        .iter()
+        .find(|mount| mount.device_id == device_id && mount.account == account)
+        .and_then(|mount| mount.internet.clone())
+}
+
+/// Checks an internet address in the assistant, against the host key trusted a
+/// step earlier.
+#[tauri::command]
+pub async fn setup_check_address(
+    address: Address,
+    state: State<'_, AppState>,
+) -> Result<crate::mounts::AddressCheck, Failure> {
+    let pinned = state
+        .pending
+        .lock()
+        .await
+        .as_ref()
+        .ok_or_else(|| Failure::new("not-connected", None))?
+        .trusted
+        .clone()
+        .ok_or_else(|| Failure::new("host-key-unknown", None))?;
+    crate::mounts::verify_address(address, pinned).await
+}
+
 fn device_name() -> String {
     "Syno Mount (Linux)".to_owned()
 }
@@ -210,7 +240,7 @@ pub async fn connect(
         installed: None,
         dsm_shares,
         cpu,
-        internet: None,
+        internet: known_internet(&state, &device.id, &device.account),
     });
     sign_out(previous).await;
     Ok(ConnectOutcome::Connected { device })
@@ -274,7 +304,7 @@ pub async fn connect_ssh_only(
         installed: None,
         dsm_shares: None,
         cpu: CpuKind::Unknown,
-        internet: None,
+        internet: known_internet(&state, &device.id, &device.account),
     });
     sign_out(previous).await;
     Ok(device)

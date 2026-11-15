@@ -196,12 +196,19 @@ pub fn run_mount(paths: &Paths, id: &str) -> Result<(), String> {
         .ok_or_else(|| format!("no mount with the ID {id}"))?
         .clone();
     let started = Instant::now();
+    let mut said = String::new();
     let (route, address) = loop {
-        if let Some(choice) = status::choose(&mount, PROBE_TIMEOUT) {
-            break choice;
-        }
+        let reason = match status::choose(&mount, PROBE_TIMEOUT) {
+            Ok(choice) => break choice,
+            Err(reason) => reason,
+        };
         if started.elapsed() > WAIT_FOR_NAS {
-            return Err(format!("{} does not answer on any address", mount.nas_name));
+            return Err(format!("{} does not answer: {reason}", mount.nas_name));
+        }
+        // The journal shows each new reason once, not every three seconds.
+        if reason != said {
+            eprintln!("waiting for {}: {reason}", mount.nas_name);
+            said = reason;
         }
         std::thread::sleep(Duration::from_secs(3));
     };

@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    checkAddress,
     isWindows,
     parseAddress,
     toFailure,
@@ -8,27 +7,29 @@
     type AddressCheck,
     type Failure,
   } from '../lib/backend';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { t } from '../lib/i18n.svelte';
 
   let {
     initial,
     address = $bindable(),
-    mountId,
+    check: checker,
     label,
   }: {
     initial?: Address;
     /** The address as typed: `undefined` when empty, `null` when not valid. */
     address?: Address | null;
-    /** With a mount, the address can be checked against its pinned host key. */
-    mountId?: string;
+    /** Checks the address against the pinned host key of the NAS. */
+    check?: (address: Address) => Promise<AddressCheck>;
     label: string;
   } = $props();
 
   // The form starts from the saved address once; later edits belong to the user.
   // svelte-ignore state_referenced_locally
   const start = initial;
-  let text = $state(start ? `${start.host}:${start.port}` : '');
+  let text = $state(
+    start ? `${start.host.includes(':') ? `[${start.host}]` : start.host}:${start.port}` : '',
+  );
   let https = $state(Boolean(start?.tunnel));
   let serverName = $state(
     start?.tunnel && start.tunnel.serverName !== start.host ? start.tunnel.serverName : '',
@@ -41,6 +42,16 @@
   let failure = $state<Failure | null>(null);
 
   const parsed = $derived(text.trim() ? parseAddress(text, https ? 443 : 22) : undefined);
+
+  // "https://…" or port 443 means a reverse proxy, not SSH: tick the box for the user.
+  $effect(() => {
+    const typed = text.trim();
+    if (/^https:\/\//i.test(typed) || /:443(\/.*)?$/.test(typed)) {
+      untrack(() => {
+        if (!isWindows()) https = true;
+      });
+    }
+  });
 
   $effect(() => {
     if (!parsed) {
@@ -67,12 +78,12 @@
   });
 
   async function check() {
-    if (!mountId || !address) return;
+    if (!checker || !address) return;
     checking = true;
     result = null;
     failure = null;
     try {
-      result = await checkAddress(mountId, address);
+      result = await checker(address);
     } catch (error) {
       failure = toFailure(error);
     } finally {
@@ -139,7 +150,7 @@
     </details>
   {/if}
 
-  {#if mountId && address}
+  {#if checker && address}
     <div class="check">
       <button class="button small" type="button" disabled={checking} onclick={check}>
         {checking ? t('internet-checking') : t('internet-check')}
