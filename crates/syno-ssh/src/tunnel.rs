@@ -23,8 +23,9 @@ use crate::Error;
 /// The ALPN protocol the proxy routes on.
 pub const ALPN: &[u8] = b"syno-mount-ssh";
 
-/// Time for TCP and TLS to one address of the proxy in [`connect`].
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Time for TCP and TLS to one address of the proxy in [`connect`]: two addresses
+/// fit into ssh's `ConnectTimeout` of 10 s.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// Large buffers keep the copying out of the way of SFTP's big reads and writes.
 const BUFFER: usize = 256 * 1024;

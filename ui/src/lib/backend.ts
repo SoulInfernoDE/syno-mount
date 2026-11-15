@@ -200,6 +200,8 @@ export interface ShareChoice {
 export interface Installation {
   shares: ShareChoice[];
   chrooted: boolean;
+  /** The internet address other folders of this NAS have. */
+  internet?: Address;
 }
 
 export interface CreateRequest {

@@ -334,7 +334,7 @@ pub fn agent(paths: &Paths) -> ! {
                     && !status::answers(&mount.local_path, Duration::from_secs(4));
                 let back_on_lan = round
                     && process.route == Route::Internet
-                    && status::reach(&mount.lan, PROBE_TIMEOUT).is_some();
+                    && status::probe(&mount.lan, PROBE_TIMEOUT).is_ok();
                 if ended || hanging || back_on_lan || asked {
                     if let Some(mut process) = running.remove(&mount.id) {
                         let _ = process.child.kill();

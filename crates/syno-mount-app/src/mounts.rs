@@ -166,6 +166,7 @@ pub async fn update_mount(
     state: State<'_, AppState>,
 ) -> Result<Mount, Failure> {
     let mut mount = find(&state, &id)?;
+    let before = mount.internet.clone();
     mount.at_login = settings.at_login;
     mount.bookmark = settings.bookmark;
     mount.internet = settings
@@ -177,23 +178,9 @@ pub async fn update_mount(
             .mounts
             .lock()
             .map_err(|_| Failure::new("storage", None))?;
-        // The internet address belongs to the NAS: the other folders of the same
-        // NAS and account take it over, or they would stay without one.
-        let siblings: Vec<Mount> = store
-            .all()
-            .iter()
-            .filter(|other| {
-                other.id != mount.id
-                    && other.device_id == mount.device_id
-                    && other.account == mount.account
-                    && other.internet != mount.internet
-            })
-            .cloned()
-            .collect();
-        for mut sibling in siblings {
-            sibling.internet = mount.internet.clone();
-            store.upsert(sibling)?;
-        }
+        // A changed internet address also goes to the other folders of the NAS
+        // that had the old one; an unchanged one leaves them alone.
+        store.share_internet(&mount.device_id, &mount.account, &before, &mount.internet)?;
         store.upsert(mount.clone())?;
     }
     let paths = state.paths.clone();
