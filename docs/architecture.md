@@ -34,7 +34,9 @@ The password lives only in memory while the assistant is open.
 
 ## Mounting
 
-`run-mount <id>` loads the folder from `mounts.json`, tries the LAN address and then the internet address (TCP, 1.5 s each, for up to 30 s), notes the choice in `~/.local/state/syno-mount/<id>.json` and replaces itself with `sshfs -f`. Options:
+An address counts only when SSH answers there: the first bytes must be the SSH banner, so another device with the same private address in a foreign network does not count (LAN 1.5 s, internet 5 s per step; behind a proxy, TLS and the banner behind it). Every address of a name is tried, IPv6 and IPv4. When none answers, the journal says why for each one, for example `LAN 192.168.1.20:22: timed out; internet nas.example.org:2222: connection refused`, or that no internet address is set.
+
+`run-mount <id>` loads the folder from `mounts.json`, tries the LAN address and then the internet address for up to 30 s, notes the choice in `~/.local/state/syno-mount/<id>.json` and replaces itself with `sshfs -f`. Options:
 
 - ssh: `IdentityFile`, `IdentitiesOnly`, `UserKnownHostsFile`, `HostKeyAlias`, `HostKeyAlgorithms`, `StrictHostKeyChecking=yes`, `BatchMode=yes`, `ServerAliveInterval=15`, `ServerAliveCountMax=3`, `Ciphers` (AES-GCM first on Intel/AMD, ChaCha20 first on ARM; commas escaped for FUSE), compression only over the internet.
 - sshfs: `reconnect`, `max_conns` (sshfs 3.7+), `auto_unmount`, `fsname=syno-mount:<id>`, listing cache, and `idmap=file` with `uidfile`/`gidfile` that map the account's numbers on the NAS to the local user and group.

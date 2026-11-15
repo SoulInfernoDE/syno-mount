@@ -7,7 +7,7 @@
     type AddressCheck,
     type Failure,
   } from '../lib/backend';
-  import { tick, untrack } from 'svelte';
+  import { tick } from 'svelte';
   import { t } from '../lib/i18n.svelte';
 
   let {
@@ -43,15 +43,14 @@
 
   const parsed = $derived(text.trim() ? parseAddress(text, https ? 443 : 22) : undefined);
 
-  // "https://…" or port 443 means a reverse proxy, not SSH: tick the box for the user.
-  $effect(() => {
+  // "https://…" or port 443 typed by the user means a reverse proxy, not SSH: tick
+  // the box once. Only on the user's own change, so a saved direct address on
+  // port 443 stays as it is, and an untick sticks.
+  function suggestHttps() {
     const typed = text.trim();
-    if (/^https:\/\//i.test(typed) || /:443(\/.*)?$/.test(typed)) {
-      untrack(() => {
-        if (!isWindows()) https = true;
-      });
-    }
-  });
+    if (isWindows() || https) return;
+    if (/^https:\/\//i.test(typed) || parseAddress(typed, 22)?.port === 443) https = true;
+  }
 
   $effect(() => {
     if (!parsed) {
@@ -106,6 +105,7 @@
     <input
       class="input"
       bind:value={text}
+      onchange={suggestHttps}
       placeholder={https ? t('internet-https-placeholder') : t('settings-internet-placeholder')}
       spellcheck="false"
       aria-invalid={parsed === null}

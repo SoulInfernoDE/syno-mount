@@ -34,7 +34,9 @@ Das Passwort liegt nur im Speicher, solange der Assistent offen ist.
 
 ## Einbinden
 
-`run-mount <id>` lädt den Ordner aus `mounts.json`, probiert die LAN-Adresse und dann die Internet-Adresse (TCP, je 1,5 s, bis zu 30 s lang), notiert die Wahl in `~/.local/state/syno-mount/<id>.json` und ersetzt sich durch `sshfs -f`. Optionen:
+Eine Adresse zählt nur, wenn dort SSH antwortet: Die ersten Bytes müssen das SSH-Banner sein, damit ein anderes Gerät mit derselben privaten Adresse in einem fremden Netz nicht zählt (LAN 1,5 s, Internet 5 s pro Schritt; hinter einem Proxy TLS und das Banner dahinter). Jede Adresse eines Namens wird versucht, IPv6 und IPv4. Antwortet keine, sagt das Journal für jede, warum, zum Beispiel `LAN 192.168.1.20:22: timed out; internet nas.example.org:2222: connection refused`, oder dass keine Internet-Adresse eingetragen ist.
+
+`run-mount <id>` lädt den Ordner aus `mounts.json`, probiert bis zu 30 s lang die LAN-Adresse und dann die Internet-Adresse, notiert die Wahl in `~/.local/state/syno-mount/<id>.json` und ersetzt sich durch `sshfs -f`. Optionen:
 
 - ssh: `IdentityFile`, `IdentitiesOnly`, `UserKnownHostsFile`, `HostKeyAlias`, `HostKeyAlgorithms`, `StrictHostKeyChecking=yes`, `BatchMode=yes`, `ServerAliveInterval=15`, `ServerAliveCountMax=3`, `Ciphers` (AES-GCM zuerst bei Intel/AMD, ChaCha20 zuerst bei ARM; Kommas für FUSE maskiert), Kompression nur über das Internet.
 - sshfs: `reconnect`, `max_conns` (ab sshfs 3.7), `auto_unmount`, `fsname=syno-mount:<id>`, Cache für Ordnerlisten und `idmap=file` mit `uidfile`/`gidfile`, die die Nummern des Kontos auf dem NAS dem lokalen Nutzer und seiner Gruppe zuordnen.

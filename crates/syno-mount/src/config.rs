@@ -167,6 +167,38 @@ impl MountStore {
         self.save()
     }
 
+    /// The internet address belongs to the NAS: when it changes from `before` to
+    /// `after`, the other folders of the same NAS and account that still had
+    /// `before` follow. Folders with an address of their own keep it.
+    pub fn share_internet(
+        &mut self,
+        device_id: &str,
+        account: &str,
+        before: &Option<Address>,
+        after: &Option<Address>,
+    ) -> io::Result<()> {
+        if before == after {
+            return Ok(());
+        }
+        let mut changed = false;
+        for mount in &mut self.mounts {
+            if mount.device_id == device_id && mount.account == account && &mount.internet == before
+            {
+                mount.internet = after.clone();
+                changed = true;
+            }
+        }
+        if changed { self.save() } else { Ok(()) }
+    }
+
+    /// The internet address some folder of this NAS and account has.
+    pub fn internet_of(&self, device_id: &str, account: &str) -> Option<Address> {
+        self.mounts
+            .iter()
+            .filter(|mount| mount.device_id == device_id && mount.account == account)
+            .find_map(|mount| mount.internet.clone())
+    }
+
     pub fn remove(&mut self, id: &str) -> io::Result<Option<Mount>> {
         let index = self.mounts.iter().position(|mount| mount.id == id);
         let removed = index.map(|index| self.mounts.remove(index));
@@ -217,6 +249,50 @@ pub(crate) mod tests {
             at_login: true,
             bookmark: true,
         }
+    }
+
+    #[test]
+    fn shares_the_internet_address_only_with_folders_that_had_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = MountStore::load(&dir.path().join("mounts.json"));
+        let address = |host: &str| {
+            Some(Address {
+                host: host.into(),
+                port: 2222,
+                tunnel: None,
+            })
+        };
+        let mut media = sample(dir.path());
+        media.internet = None;
+        let mut games = media.clone();
+        games.id = "games".into();
+        let mut own = media.clone();
+        own.id = "own".into();
+        own.internet = address("own.example.org");
+        let mut other_nas = media.clone();
+        other_nas.id = "other".into();
+        other_nas.device_id = "other.local:5001".into();
+        for mount in [media, games, own, other_nas] {
+            store.upsert(mount).unwrap();
+        }
+        assert_eq!(
+            store.internet_of("nas.local:5001", "anna"),
+            address("own.example.org")
+        );
+
+        let new = address("nas.example.org");
+        store
+            .share_internet("nas.local:5001", "anna", &None, &new)
+            .unwrap();
+        let internet = |store: &MountStore, id: &str| store.get(id).unwrap().internet.clone();
+        assert_eq!(internet(&store, "games"), new);
+        assert_eq!(internet(&store, "own"), address("own.example.org"));
+        assert_eq!(internet(&store, "other"), None);
+        // Saving without a change touches nobody.
+        store
+            .share_internet("nas.local:5001", "anna", &new, &new)
+            .unwrap();
+        assert_eq!(internet(&store, "own"), address("own.example.org"));
     }
 
     #[test]

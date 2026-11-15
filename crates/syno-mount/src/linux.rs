@@ -266,7 +266,9 @@ fn heal(paths: &Paths, mount: &Mount, event: bool) {
         eprintln!("{}: not answering, mounting again", mount.id);
         true
     } else if event {
-        let lan_up = status::reach(&mount.lan, PROBE_TIMEOUT).is_some();
+        // The same test as choose(), or a foreign device on the LAN address
+        // would move the mount back and forth.
+        let lan_up = status::probe(&mount.lan, PROBE_TIMEOUT).is_ok();
         match status::connected(paths, &mount.id).map(|note| note.route) {
             Some(Route::Internet) if lan_up => {
                 eprintln!("{}: back on the LAN", mount.id);

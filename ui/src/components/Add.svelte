@@ -484,6 +484,7 @@
       {#if !fromMount}
         <InternetAddress
           label={t('folders-internet')}
+          initial={installation?.internet}
           check={checkSetupAddress}
           bind:address={internetAddress}
         />

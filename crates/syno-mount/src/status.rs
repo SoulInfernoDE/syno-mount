@@ -148,7 +148,8 @@ pub fn probe(address: &Address, timeout: Duration) -> Result<Duration, String> {
             }
         };
         let latency = started.elapsed();
-        let _ = stream.set_read_timeout(Some(timeout));
+        // A NAS that accepted quickly may still take a moment for its banner.
+        let _ = stream.set_read_timeout(Some(timeout.max(Duration::from_secs(3))));
         let mut banner = [0u8; 4];
         match stream.read_exact(&mut banner) {
             Ok(()) if &banner == b"SSH-" => return Ok(latency),

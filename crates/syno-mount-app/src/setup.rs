@@ -51,12 +51,7 @@ impl Pending {
 /// The internet address already set for another folder of this NAS, so that a
 /// new folder gets it too.
 fn known_internet(state: &AppState, device_id: &str, account: &str) -> Option<Address> {
-    let store = state.mounts.lock().ok()?;
-    store
-        .all()
-        .iter()
-        .find(|mount| mount.device_id == device_id && mount.account == account)
-        .and_then(|mount| mount.internet.clone())
+    state.mounts.lock().ok()?.internet_of(device_id, account)
 }
 
 /// Checks an internet address in the assistant, against the host key trusted a
@@ -420,6 +415,9 @@ pub struct Installation {
     shares: Vec<ShareChoice>,
     /// DSM keeps the account in a chroot: only its shared folders are visible.
     chrooted: bool,
+    /// The internet address other folders of this NAS have, to start from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    internet: Option<Address>,
 }
 
 fn choices(state: &AppState, pending: &Pending, installed: &Installed) -> Vec<ShareChoice> {
@@ -504,7 +502,12 @@ pub async fn install_key(
     pending.installed = Some(installed);
     // The key works now; the password is not needed any more.
     pending.password = None;
-    Ok(Installation { shares, chrooted })
+    let internet = pending.internet.clone();
+    Ok(Installation {
+        shares,
+        chrooted,
+        internet,
+    })
 }
 
 /// More shared folders from a NAS that has a mount already: signs in with the key.
@@ -558,13 +561,18 @@ pub async fn more_shares(
     };
     let chrooted = installed.layout.chrooted();
     let shares = choices(&state, &pending, &installed);
+    let internet = pending.internet.clone();
     let pending = Pending {
         installed: Some(installed),
         ..pending
     };
     let previous = state.pending.lock().await.replace(pending);
     sign_out(previous).await;
-    Ok(Installation { shares, chrooted })
+    Ok(Installation {
+        shares,
+        chrooted,
+        internet,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -604,10 +612,11 @@ pub async fn create_mounts(
         .clone()
         .ok_or_else(|| Failure::new("host-key-unknown", None))?;
     let key = core::key_pair(&state.paths, &pending.device.id, &pending.device.account)?;
+    let known = pending.internet.clone();
     let internet = request
         .internet
         .filter(|address| !address.host.trim().is_empty())
-        .or_else(|| pending.internet.clone());
+        .or_else(|| known.clone());
     let link = NasLink {
         device_id: pending.device.id.clone(),
         nas_name: pending.device.name.clone(),
@@ -644,6 +653,8 @@ pub async fn create_mounts(
         for mount in &to_apply {
             store.upsert(mount.clone())?;
         }
+        // An address typed here also reaches the folders this NAS had already.
+        store.share_internet(&link.device_id, &link.account, &known, &link.internet)?;
     }
     spawn_blocking(move || -> Result<(), Failure> {
         for mount in &to_apply {
