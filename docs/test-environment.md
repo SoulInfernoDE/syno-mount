@@ -27,6 +27,8 @@ On the VM: a shared folder `mounttest`, an account with read/write access to it,
 set -a; . ./.env.vdsm; set +a
 cargo run -p syno-ssh --example vdsm-key      # key install, key login, key removal
 cargo run -p syno-mount --example vdsm    # + DSM, shares, sshfs, self-test, speed test
+cargo run -p syno-mount --example key-check   # key install as the assistant does it, and why a key is refused
+cargo run -p syno-dsm --example key-login     # "Prepare key login" for VDSM_USER (needs VDSM_ADMIN_USER/_PASSWORD)
 ```
 
 Both run in temporary folders and remove the key from the NAS at the end. The `systemd` example sets up a real service on this computer and leaves it in place until `… --example systemd remove`.
@@ -84,6 +86,19 @@ A Synology NAS with DSM 7.4.1, encrypted shared folders on SSD, and an account m
 | Windows, stop                                                   | `Z:` gone after 1.5 s                                                                   |
 
 Found on the way: a Windows self-test could leave its empty test folder behind while rclone was still uploading; the cleanup now tries again for a moment.
+
+## Home folder with Windows ACL (Virtual DSM 7.4.1)
+
+The Virtual DSM's homes show 711 and take the key. To reproduce the real NAS, a fresh regular account `acltest` got an ACL entry that lets everyone write (`sudo synoacltool -add /var/services/homes/acltest everyone:*:allow:rwxpdDaARWc--:fd--`), after which the home, `.ssh` and `authorized_keys` show 777.
+
+| Test                                      | Result                                                                           |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `key-check` with the ACL                  | `key-refused-acl-home`, detail "home 777, .ssh 777, authorized_keys 777"         |
+| `key-login` (Task Scheduler as root)      | `Done`; home 755, `.ssh` 700, `authorized_keys` 600, no ACL; no task left        |
+| `key-check` afterwards                    | key login works                                                                  |
+| `key-login` again on the prepared account | `Done` (`synoacltool -del` on a path without ACL fails, which the script allows) |
+| Wrong administrator password              | DSM error 3121, shown as "Account or password is wrong"; nothing created         |
+| Account without home folder               | `NoHome` (exit code 10)                                                          |
 
 ## Windows
 

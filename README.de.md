@@ -27,7 +27,7 @@ Gemacht für alle, denen SMB und WebDAV nicht reichen: Programme und Spiele, die
 - **Bindet jeden Ordner ein**, auf Wunsch bei der Anmeldung, mit Keep-alives, der schnellsten Verschlüsselung für den Prozessor des NAS und parallelen Verbindungen. Unter **Linux** als Ordner über `sshfs`, mit einem eigenen systemd-User-Dienst pro Ordner, und eigene Dateien gehören dir (Besitzer-Zuordnung). Unter **Windows** als Netzlaufwerk oder Ordner über `rclone`.
 - **Hält Ordner eingebunden:** Ein kleiner Agent bemerkt Standby und Netzwechsel, löst hängende Mounts, bindet neu ein und wechselt zwischen LAN- und Internet-Adresse.
 - **Selbsttest und Geschwindigkeitstest** pro Ordner, eine Statusseite mit Weg, Latenz und ob der Name des NAS per verschlüsseltem DNS aufgelöst wird, der genaue `sshfs`- oder `rclone`-Befehl zum Nachlesen und **Rückgängig** für alles, auch für den Schlüssel auf dem NAS.
-- **Konten auf dem NAS** (Adminbereich): welche DSM-Konten SFTP nutzen dürfen und welche Freigaben sie öffnen dürfen (kein Zugriff, nur lesen, lesen und schreiben), mit einer Prüfung „bereit für Syno Mount“ pro Konto. Eine Ansicht nach Konto setzt den Zugriff eines Kontos auf jede Freigabe und zeigt vorab, was es über SFTP sehen wird, Gruppenrechte eingeschlossen. In DSM ändert sich nichts, bevor du die Liste der Änderungen bestätigst.
+- **Konten auf dem NAS** (Adminbereich): welche DSM-Konten SFTP nutzen dürfen und welche Freigaben sie öffnen dürfen (kein Zugriff, nur lesen, lesen und schreiben), mit einer Prüfung „bereit für Syno Mount“ pro Konto. Eine Ansicht nach Konto setzt den Zugriff eines Kontos auf jede Freigabe und zeigt vorab, was es über SFTP sehen wird, Gruppenrechte eingeschlossen. „Schlüssel-Login vorbereiten“ behebt einen Home-Ordner, dessen Windows-ACLs SSH den Schlüssel nicht annehmen lassen. In DSM ändert sich nichts, bevor du die Liste der Änderungen bestätigst.
 
 <p align="center">
   <img src="docs/images/admin.de.png" alt="Der Adminbereich: Konten mit ihrem SFTP-Recht und dem Zugriff auf die Freigabe Games, und ob jedes bereit für Syno Mount ist" width="760">
@@ -63,7 +63,11 @@ Danach gehört der Ordner seinem Besitzer mit den Rechten, die er hat; setze sie
 
 ### Wenn das NAS den Schlüssel ablehnt
 
-DSM legt Home-Ordner mit Windows-ACLs an, deshalb zeigen `.ssh` und `authorized_keys` `777`, und SSH ignoriert einen Schlüssel mit so offenen Rechten. Das Passwort wird angenommen und der Schlüssel installiert, aber die Anmeldung mit dem Schlüssel wird abgelehnt. Ein Administrator behebt das einmal pro Konto auf dem NAS:
+DSM legt Home-Ordner mit Windows-ACLs an. Erlaubt die ACL anderen das Schreiben (oft als `777` auf Home-Ordner, `.ssh` und `authorized_keys` zu sehen), ignoriert SSH den Schlüssel: Das Passwort wird angenommen und der Schlüssel installiert, aber die Anmeldung mit dem Schlüssel wird abgelehnt. Der Assistent erkennt das, zeigt die gefundenen Rechte und sagt, dass ein Administrator das Konto einmal vorbereiten muss.
+
+Der Administrator macht das in Syno Mount: **Konten auf dem NAS › Nach Konto › Schlüssel-Login vorbereiten**. Syno Mount zeigt zuerst die genauen Befehle; nachdem der Administrator sie bestätigt und sein Passwort noch einmal eingegeben hat (DSM fragt es ab, bevor etwas als root läuft), führt es sie einmal als root über den Aufgabenplaner von DSM aus und löscht die Aufgabe danach. Die Befehle entfernen die ACLs von Home-Ordner, `.ssh` und `authorized_keys` und setzen 755, 700 und 600; Schlüssel in der Datei bleiben erhalten. Danach den Assistenten mit dem Konto noch einmal starten.
+
+Ohne Syno Mount kann ein Administrator dasselbe von Hand auf dem NAS ausführen:
 
 ```sh
 sudo synoacltool -del /var/services/homes/<konto>

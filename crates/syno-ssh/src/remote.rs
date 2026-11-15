@@ -47,6 +47,48 @@ impl Layout {
     }
 }
 
+/// The permissions of the paths OpenSSH checks before it takes a key from
+/// `authorized_keys` (`StrictModes`); `None` where a path is missing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyModes {
+    pub home: Option<u32>,
+    pub ssh: Option<u32>,
+    pub keys: Option<u32>,
+}
+
+impl KeyModes {
+    /// Group or others may write one of the paths, so sshd ignores the key. DSM
+    /// shows home folders with Windows ACLs this way, often as 777.
+    pub fn too_open(&self) -> bool {
+        [self.home, self.ssh, self.keys]
+            .into_iter()
+            .flatten()
+            .any(|mode| mode & 0o022 != 0)
+    }
+
+    /// "home 777, .ssh 777, authorized_keys 777", for the error detail.
+    pub fn describe(&self) -> String {
+        let show = |mode: Option<u32>| match mode {
+            Some(mode) => format!("{:03o}", mode & 0o7777),
+            None => "missing".into(),
+        };
+        format!(
+            "home {}, .ssh {}, authorized_keys {}",
+            show(self.home),
+            show(self.ssh),
+            show(self.keys)
+        )
+    }
+
+    /// Why a key login failed right after the key was installed.
+    pub fn refusal(&self) -> Error {
+        Error::KeyRefused {
+            modes: self.describe(),
+            too_open: self.too_open(),
+        }
+    }
+}
+
 fn step_error(what: &str, error: russh_sftp::client::error::Error) -> Error {
     Error::Sftp(format!("{what}: {error}"))
 }
@@ -234,6 +276,25 @@ impl Sftp {
         Ok(())
     }
 
+    /// The modes of the home, `.ssh` and `authorized_keys` as SFTP shows them.
+    pub async fn key_modes(&self) -> Result<KeyModes, Error> {
+        let home = self.home().await?;
+        let ssh = format!("{}/.ssh", home.trim_end_matches('/'));
+        let file = format!("{ssh}/authorized_keys");
+        let mode = async |path: &str| {
+            self.session
+                .metadata(path)
+                .await
+                .ok()
+                .and_then(|attributes| attributes.permissions)
+        };
+        Ok(KeyModes {
+            home: mode(&home).await,
+            ssh: mode(&ssh).await,
+            keys: mode(&file).await,
+        })
+    }
+
     /// Removes the key of `line` (an `authorized_keys` line) from
     /// `~/.ssh/authorized_keys`.
     pub async fn remove_key(&self, line: &str) -> Result<(), Error> {
@@ -281,6 +342,48 @@ mod tests {
         let restricted = format!("restrict {OURS}");
         assert_eq!(without_key(&format!("{restricted}\n"), OURS), "");
         assert_eq!(without_key(&text, "not a key"), text);
+    }
+
+    #[test]
+    fn finds_modes_that_sshd_rejects() {
+        // As DSM 7.4.1 shows a home folder whose ACL lets everyone write, over SFTP
+        // (with the directory and file type bits).
+        let acl = KeyModes {
+            home: Some(0o40777),
+            ssh: Some(0o40777),
+            keys: Some(0o100777),
+        };
+        assert!(acl.too_open());
+        assert_eq!(acl.describe(), "home 777, .ssh 777, authorized_keys 777");
+        assert_eq!(acl.refusal().key(), "key-refused-acl-home");
+
+        // What the commands of the administrator area leave behind.
+        let fixed = KeyModes {
+            home: Some(0o40755),
+            ssh: Some(0o40700),
+            keys: Some(0o100600),
+        };
+        assert!(!fixed.too_open());
+        assert_eq!(fixed.refusal().key(), "key-refused");
+
+        // Writable by the group alone is enough for sshd to refuse.
+        let group = KeyModes {
+            home: Some(0o40775),
+            ssh: Some(0o40700),
+            keys: None,
+        };
+        assert!(group.too_open());
+        assert_eq!(
+            group.describe(),
+            "home 775, .ssh 700, authorized_keys missing"
+        );
+        // Readable by everyone is fine.
+        let readable = KeyModes {
+            home: Some(0o40755),
+            ssh: Some(0o40755),
+            keys: Some(0o100644),
+        };
+        assert!(!readable.too_open());
     }
 
     #[test]

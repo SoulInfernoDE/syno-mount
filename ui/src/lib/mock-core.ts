@@ -2,7 +2,8 @@
 // interface and for screenshots without a NAS. Only loaded by `npm run dev` with
 // `?mock` in the address. Sign in with password "demo"; the NAS first shows an
 // unknown certificate. `?mock=empty` starts without folders. For screenshots,
-// `&shot=selftest` opens a self-test and `&shot=add` the assistant.
+// `&shot=selftest` opens a self-test and `&shot=add` the assistant. The assistant
+// refuses the key for the account "carla", as for a home folder with Windows ACLs.
 
 import type {
   Address,
@@ -330,7 +331,17 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
     return services();
   },
   scan_host_key: async () => (await wait(400), hostKey),
-  install_key: async () => (await wait(900), installation()),
+  install_key: async () => {
+    await wait(900);
+    // "carla" has a home folder with Windows ACLs, as DSM creates them.
+    if (pending?.device.account === 'carla') {
+      throw {
+        key: 'key-refused-acl-home',
+        detail: 'home 777, .ssh 777, authorized_keys 777',
+      };
+    }
+    return installation();
+  },
   more_shares: async (args) => {
     const view = find(args.mountId);
     pending = {
@@ -413,6 +424,26 @@ const commands: Record<string, (args: Record<string, unknown>) => Promise<unknow
   admin_enable_services: async () => ({ sftp: true, sftpPort: 22, home: true }),
   admin_disconnect: async () => {
     adminDevice = null;
+  },
+  admin_key_login_script: async (args) =>
+    [
+      `cd /var/services/homes/${args.account as string} || exit 10`,
+      'mkdir -p .ssh || exit 11',
+      'touch .ssh/authorized_keys || exit 11',
+      'synoacltool -del .',
+      'synoacltool -del .ssh',
+      'synoacltool -del .ssh/authorized_keys',
+      `chown ${args.account as string} .ssh .ssh/authorized_keys || exit 12`,
+      'chmod 755 . || exit 13',
+      'chmod 700 .ssh || exit 13',
+      'chmod 600 .ssh/authorized_keys || exit 13',
+      `test "$(stat -c %a . .ssh .ssh/authorized_keys | tr '\\n' ' ')" = '755 700 600 ' || exit 14`,
+      '',
+    ].join('\n'),
+  admin_prepare_key_login: async (args) => {
+    await wait(1500);
+    const request = args.request as { account: string; password: string };
+    if (request.password !== 'demo') throw { key: 'wrong-credentials' };
   },
   self_test: async () => (await wait(1200), checks),
   speed_test: async () => (await wait(1500), speed),

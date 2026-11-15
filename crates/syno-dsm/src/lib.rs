@@ -13,6 +13,7 @@ mod cpu;
 mod files;
 mod overview;
 mod setup;
+mod tasks;
 pub mod tls;
 
 use std::collections::HashMap;
@@ -22,7 +23,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
-pub use accounts::{Access, Account, AccountShare, AdminShare, Permission, SftpRule, ShareAccess};
+pub use accounts::{
+    Access, Account, AccountShare, AdminShare, KeyLoginPrepared, Permission, SftpRule, ShareAccess,
+    key_login_script,
+};
 pub use files::{CpuKind, Services, Share};
 pub use overview::{Drive, DriveKind, Health, NetworkPort, Overview, Volume};
 pub use setup::{
@@ -47,8 +51,11 @@ const APIS: &[&str] = &[
     "SYNO.Core.Share.Permission",
     "SYNO.Core.System",
     "SYNO.Core.System.Utilization",
+    "SYNO.Core.TaskScheduler",
+    "SYNO.Core.TaskScheduler.Root",
     "SYNO.Core.User",
     "SYNO.Core.User.Home",
+    "SYNO.Core.User.PasswordConfirm",
     "SYNO.FileStation.List",
     "SYNO.Storage.CGI.Storage",
 ];

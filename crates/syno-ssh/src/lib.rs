@@ -20,7 +20,7 @@ use russh_sftp::client::SftpSession;
 use serde::Serialize;
 
 pub use keys::{KeyPair, KnownHosts, host_alias};
-pub use remote::{KEY_MARKER, Layout};
+pub use remote::{KEY_MARKER, KeyModes, Layout};
 pub use tunnel::Tunnel;
 
 /// Time for TCP connect and SSH handshake together.
@@ -36,6 +36,11 @@ pub enum Error {
     HostKeyChanged { fingerprint: String },
     #[error("the NAS refused the sign-in")]
     AuthFailed,
+    /// The password works and the key is installed, but sshd does not take it.
+    /// `too_open`: the home, `.ssh` or `authorized_keys` may be written by others
+    /// (as Windows ACLs show them), which OpenSSH's `StrictModes` rejects.
+    #[error("the NAS refuses the installed key ({modes})")]
+    KeyRefused { modes: String, too_open: bool },
     #[error("SFTP: {0}")]
     Sftp(String),
     #[error("TLS to the proxy: {0}")]
@@ -58,6 +63,10 @@ impl Error {
             Self::HostKeyUnknown { .. } => "host-key-unknown",
             Self::HostKeyChanged { .. } => "host-key-changed",
             Self::AuthFailed => "ssh-auth-failed",
+            Self::KeyRefused { too_open: true, .. } => "key-refused-acl-home",
+            Self::KeyRefused {
+                too_open: false, ..
+            } => "key-refused",
             Self::Sftp(_) => "sftp",
             Self::Tls(_) => "proxy-tls",
             Self::CertificateUntrusted { .. } => "proxy-certificate-untrusted",

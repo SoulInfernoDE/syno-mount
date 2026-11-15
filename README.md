@@ -27,7 +27,7 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
 - **Mounts each folder** at login if you like, with keep-alives, the fastest cipher for the NAS's processor and parallel connections. On **Linux** as a folder through `sshfs`, one systemd user service each, and your own files show as yours (owner mapping). On **Windows** as a network drive or folder through `rclone`.
 - **Keeps folders mounted:** a small agent notices suspend and network changes, releases hanging mounts and mounts again, and switches between the LAN and the internet address.
 - **Self-test and speed test** per folder, a status page with route, latency and whether the name of the NAS is looked up with encrypted DNS, the exact `sshfs` or `rclone` command to read, and **undo** of everything, including the key on the NAS.
-- **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. A view by account sets one account's access to every folder and previews what it will see over SFTP, group permissions included. Nothing changes in DSM before you confirm the list of changes.
+- **Accounts on the NAS** (administrator area): which DSM accounts may use SFTP and which shared folders they may open (no access, read only, read and write), with a "ready for Syno Mount" check per account. A view by account sets one account's access to every folder and previews what it will see over SFTP, group permissions included. "Prepare key login" fixes a home folder whose Windows ACLs keep SSH from taking the key. Nothing changes in DSM before you confirm the list of changes.
 
 <p align="center">
   <img src="docs/images/admin.en.png" alt="The administrator area: accounts with their SFTP privilege and access to the shared folder Games, and whether each is ready for Syno Mount" width="760">
@@ -63,7 +63,11 @@ Afterwards the folder belongs to its owner with the mode it has; set it with `ch
 
 ### When the NAS refuses the key
 
-DSM creates home folders with Windows ACLs, so `.ssh` and `authorized_keys` show `777`, and SSH ignores a key with such open permissions. The password is accepted and the key installed, but signing in with the key is refused. An administrator fixes this once per account on the NAS:
+DSM creates home folders with Windows ACLs. When the ACL lets others write (often shown as `777` on the home, `.ssh` and `authorized_keys`), SSH ignores the key: the password is accepted and the key installed, but signing in with the key is refused. The assistant notices this, shows the permissions it found and says that an administrator has to prepare the account once.
+
+The administrator does that in Syno Mount: **Accounts on the NAS › By account › Prepare key login**. Syno Mount shows the exact commands first; after the administrator confirms them and enters their password again (DSM asks for it before anything runs as root), it runs them once as root through DSM's Task Scheduler and deletes the task afterwards. The commands remove the ACLs from the home, `.ssh` and `authorized_keys` and set 755, 700 and 600; keys already in the file stay. Then run the assistant again with the account.
+
+Without Syno Mount, an administrator can run the same by hand on the NAS:
 
 ```sh
 sudo synoacltool -del /var/services/homes/<account>

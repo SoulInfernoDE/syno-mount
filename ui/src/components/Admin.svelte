@@ -6,6 +6,7 @@
   import FolderLock from '@lucide/svelte/icons/folder-lock';
   import FolderOpen from '@lucide/svelte/icons/folder-open';
   import FolderPen from '@lucide/svelte/icons/folder-pen';
+  import KeyRound from '@lucide/svelte/icons/key-round';
   import LogOut from '@lucide/svelte/icons/log-out';
   import Dialog from './Dialog.svelte';
   import DsmSignIn from './DsmSignIn.svelte';
@@ -16,7 +17,9 @@
     adminConnect,
     adminDisconnect,
     adminEnableServices,
+    adminKeyLoginScript,
     adminOverview,
+    adminPrepareKeyLogin,
     adminShareAccess,
     effectivePermission,
     toFailure,
@@ -52,6 +55,15 @@
   let shareEdits = $state<Record<string, Record<string, Permission>>>({});
   let confirming = $state(false);
   let saved = $state(false);
+
+  /** "Prepare key login": the commands shown before they run as root. */
+  let keyLogin = $state<{ account: string; script: string } | null>(null);
+  let keyLoginOpen = $state(false);
+  let keyPassword = $state('');
+  let keyBusy = $state(false);
+  let keyFailure = $state<Failure | null>(null);
+  /** The account whose key login was prepared last. */
+  let keyLoginDone = $state('');
 
   async function run<T>(job: () => Promise<T>): Promise<T | undefined> {
     busy = true;
@@ -228,6 +240,32 @@
       shareEdits = {};
       saved = true;
       await load();
+    }
+  }
+
+  async function openKeyLogin(name: string) {
+    keyFailure = null;
+    keyPassword = '';
+    const script = await run(() => adminKeyLoginScript(name));
+    if (script === undefined) return;
+    keyLogin = { account: name, script };
+    keyLoginOpen = true;
+  }
+
+  async function prepareKeyLogin() {
+    if (!keyLogin) return;
+    const { account: name } = keyLogin;
+    keyBusy = true;
+    keyFailure = null;
+    try {
+      await adminPrepareKeyLogin(name, keyPassword);
+      keyLoginOpen = false;
+      keyLoginDone = name;
+    } catch (error) {
+      keyFailure = toFailure(error);
+    } finally {
+      keyBusy = false;
+      keyPassword = '';
     }
   }
 
@@ -506,6 +544,29 @@
               {/if}
             {/if}
           </div>
+          {#if !selected.disabled}
+            <div class="preview">
+              <h3>
+                <KeyRound size={16} aria-hidden="true" />
+                {t('admin-key-login-title')}
+              </h3>
+              <p class="subtle">{t('admin-key-login-text')}</p>
+              {#if keyLoginDone === selected.name}
+                <p class="subtle" role="status">
+                  {t('admin-key-login-done', { account: selected.name })}
+                </p>
+              {/if}
+              <div class="actions start">
+                <button
+                  class="button small"
+                  disabled={busy}
+                  onclick={() => selected && openKeyLogin(selected.name)}
+                >
+                  {t('admin-key-login-prepare')}
+                </button>
+              </div>
+            </div>
+          {/if}
         {/if}
       {/if}
 
@@ -564,6 +625,44 @@
   {#snippet actions()}
     <button class="button" onclick={() => (confirming = false)}>{t('settings-cancel')}</button>
     <button class="button primary" disabled={busy} onclick={apply}>{t('admin-confirm')}</button>
+  {/snippet}
+</Dialog>
+
+<Dialog
+  bind:open={keyLoginOpen}
+  wide
+  title={t('admin-key-login-confirm-title', { account: keyLogin?.account ?? '' })}
+>
+  <p class="muted">
+    {t('admin-key-login-confirm-text', { name: overview?.device.name ?? '' })}
+  </p>
+  <pre class="command">{keyLogin?.script ?? ''}</pre>
+  <p class="subtle">{t('admin-key-login-confirm-note')}</p>
+  <label class="field">
+    <span>{t('admin-key-login-password')}</span>
+    <input
+      class="input"
+      type="password"
+      bind:value={keyPassword}
+      autocomplete="current-password"
+      onkeydown={(event) => {
+        if (event.key === 'Enter' && keyPassword && !keyBusy) void prepareKeyLogin();
+      }}
+    />
+  </label>
+  {#if keyFailure}
+    <p class="failure" role="alert">
+      {t(`error-${keyFailure.key}`)}
+      {#if keyFailure.detail}<span class="subtle block">{keyFailure.detail}</span>{/if}
+    </p>
+  {/if}
+  {#snippet actions()}
+    <button class="button" onclick={() => (keyLoginOpen = false)}>{t('settings-cancel')}</button>
+    <button
+      class="button primary"
+      disabled={keyBusy || keyPassword === ''}
+      onclick={prepareKeyLogin}>{t('admin-key-login-run')}</button
+    >
   {/snippet}
 </Dialog>
 
@@ -695,6 +794,10 @@
   .badges {
     display: flex;
     gap: 4px;
+  }
+
+  .actions.start {
+    justify-content: flex-start;
   }
 
   .changes {

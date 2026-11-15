@@ -134,6 +134,8 @@ fn main() -> ExitCode {
             admin::admin_account_access,
             admin::admin_apply,
             admin::admin_enable_services,
+            admin::admin_key_login_script,
+            admin::admin_prepare_key_login,
             admin::admin_disconnect,
             backdrop::backdrop,
             backdrop::set_window_theme,

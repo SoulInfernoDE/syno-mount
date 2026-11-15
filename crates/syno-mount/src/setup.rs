@@ -45,17 +45,25 @@ pub struct Installed {
 }
 
 /// Installs the key with the account's password, then signs in with the key to
-/// prove that sshd takes it.
+/// prove that sshd takes it. When it does not, the error says why
+/// ([`syno_ssh::Error::KeyRefused`]).
 pub async fn install_key(
     target: &Target,
     password: &str,
     key: &KeyPair,
 ) -> Result<Installed, syno_ssh::Error> {
-    {
-        let sftp = syno_ssh::connect(target, Login::Password(password)).await?;
-        sftp.install_key(&key.authorized_line()).await?;
+    let sftp = syno_ssh::connect(target, Login::Password(password)).await?;
+    sftp.install_key(&key.authorized_line()).await?;
+    match inspect(target, key).await {
+        // The password works, so a refused key is about the key. The password
+        // session is still open to find out why: mostly a home folder with Windows
+        // ACLs, which only an administrator can change.
+        Err(syno_ssh::Error::AuthFailed) => Err(match sftp.key_modes().await {
+            Ok(modes) => modes.refusal(),
+            Err(_) => syno_ssh::Error::AuthFailed,
+        }),
+        other => other,
     }
-    inspect(target, key).await
 }
 
 /// Signs in with the key and reads layout, owner and shared folders.
