@@ -61,6 +61,19 @@ sudo synoacltool -del /volume1/<freigabe>/<ordner>
 
 Danach gehört der Ordner seinem Besitzer mit den Rechten, die er hat; setze sie wie gewohnt mit `chmod`. Mach das nur für Ordner, die ein einziges Konto nutzt: Die Rechte-Einstellungen von DSM gelten für sie dann nicht mehr.
 
+### Wenn das NAS den Schlüssel ablehnt
+
+DSM legt Home-Ordner mit Windows-ACLs an, deshalb zeigen `.ssh` und `authorized_keys` `777`, und SSH ignoriert einen Schlüssel mit so offenen Rechten. Das Passwort wird angenommen und der Schlüssel installiert, aber die Anmeldung mit dem Schlüssel wird abgelehnt. Ein Administrator behebt das einmal pro Konto auf dem NAS:
+
+```sh
+sudo synoacltool -del /var/services/homes/<konto>
+sudo synoacltool -del /var/services/homes/<konto>/.ssh
+sudo synoacltool -del /var/services/homes/<konto>/.ssh/authorized_keys
+sudo chmod 755 /var/services/homes/<konto>
+sudo chmod 700 /var/services/homes/<konto>/.ssh
+sudo chmod 600 /var/services/homes/<konto>/.ssh/authorized_keys
+```
+
 ## Windows
 
 Unter Windows wird jeder Ordner ein **Netzlaufwerk** (ab `Z:` abwärts) oder ein Ordner. [rclone](https://rclone.org) spricht SFTP, [WinFsp](https://winfsp.dev) stellt das Laufwerk bereit; beides ist freie Software (siehe [Installation](#installation)).

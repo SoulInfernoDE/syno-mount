@@ -53,7 +53,14 @@ impl Scratch {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        // rclone may still be uploading what was just deleted, so the folder is
+        // not empty yet on the NAS: try again for a moment rather than leave it.
+        for _ in 0..10 {
+            if fs::remove_dir_all(&self.0).is_ok() || !self.0.exists() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(300));
+        }
     }
 }
 

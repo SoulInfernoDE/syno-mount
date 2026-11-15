@@ -61,6 +61,19 @@ sudo synoacltool -del /volume1/<share>/<folder>
 
 Afterwards the folder belongs to its owner with the mode it has; set it with `chmod` as usual. Do this only for folders that one account uses: DSM's permission settings no longer apply to them.
 
+### When the NAS refuses the key
+
+DSM creates home folders with Windows ACLs, so `.ssh` and `authorized_keys` show `777`, and SSH ignores a key with such open permissions. The password is accepted and the key installed, but signing in with the key is refused. An administrator fixes this once per account on the NAS:
+
+```sh
+sudo synoacltool -del /var/services/homes/<account>
+sudo synoacltool -del /var/services/homes/<account>/.ssh
+sudo synoacltool -del /var/services/homes/<account>/.ssh/authorized_keys
+sudo chmod 755 /var/services/homes/<account>
+sudo chmod 700 /var/services/homes/<account>/.ssh
+sudo chmod 600 /var/services/homes/<account>/.ssh/authorized_keys
+```
+
 ## Windows
 
 On Windows each folder becomes a **network drive** (from `Z:` down) or a folder. [rclone](https://rclone.org) speaks SFTP and [WinFsp](https://winfsp.dev) provides the drive; both are free software (see [Install](#install)).

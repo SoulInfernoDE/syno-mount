@@ -66,6 +66,25 @@ cargo run -p syno-ssh --example tunnel-probe -- 127.0.0.1 28443 proxy.test.local
 
 For a mount, `… --example systemd prepare` writes the folder, then its internet address gets a `tunnel` in `mounts.json` and the LAN port a closed one, so that `syno-mount run-mount <id>` takes the tunnel. Results: [https-tunnel.md](https-tunnel.md#phase-1-tested).
 
+## Against a real NAS (DSM 7.4.1)
+
+A Synology NAS with DSM 7.4.1, encrypted shared folders on SSD, and an account made for the test (not an administrator, two-step verification enforced). Linux client: the build of this branch in an LXC container; Windows client: the installer from the release workflow on a Windows 11 VM. The password came from auth-switch (`auth-switch exec --synology --password`) and was only used to install the key.
+
+| Test                                                            | Result                                                                                  |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Password over SFTP with two-step verification enforced          | accepted; the key is installed                                                          |
+| Key login, home folder with Windows ACL                         | refused (`777` on `.ssh` and `authorized_keys`); works after the commands in the README |
+| Linux, LAN                                                      | mounted after 0.27 s, latency 2.4 ms; self-test as for an ACL share                     |
+| Linux, write and read 128–256 MiB                               | 98 MiB/s write, 105 MiB/s read; direct SFTP 92/97 MiB/s                                 |
+| Linux, internet name over IPv6                                  | mounted after 0.3 s, route "internet", DNS "plain" shown                                |
+| Linux, internet address over IPv4 without port forwarding       | not mounted; journal: `…:5009: No route to host`                                        |
+| Linux, "Through HTTPS" to a web server without the stream block | not mounted; the proxy refuses the ALPN protocol                                        |
+| Windows, LAN                                                    | `Z:` after 2.6 s; self-test; 32 MiB identical                                           |
+| Windows, internet name over IPv6                                | `Z:` after 1.8 s, route "internet"                                                      |
+| Windows, stop                                                   | `Z:` gone after 1.5 s                                                                   |
+
+Found on the way: a Windows self-test could leave its empty test folder behind while rclone was still uploading; the cleanup now tries again for a moment.
+
 ## Windows
 
 Tested on a Windows 11 VM (build 26200) with WinFsp and rclone v1.75.2 from winget and the installer built by the release workflow (`-setup.exe /S`). The VM reaches the Virtual DSM through an SSH reverse tunnel (`ssh -R 25022:127.0.0.1:25022 <vm>`), so nothing on the network changes. The folder list, key and `known_hosts` were written as the app writes them; `syno-mount.exe status` and `syno-mount.exe selftest <id>` read the result without a window.
