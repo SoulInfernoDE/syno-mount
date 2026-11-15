@@ -85,6 +85,41 @@ pub async fn discover() -> Result<Vec<FoundNas>, Failure> {
         .map_err(|error| Failure::new("discovery", error))
 }
 
+/// DSM ports to try, in order, for an address typed without one: DSM's own HTTPS
+/// port, then 443 for a NAS behind a reverse proxy or a router that forwards only
+/// that port.
+const DSM_PORTS: [u16; 2] = [5001, 443];
+
+/// The port where DSM answers for an address typed without one. When none
+/// answers, the first one, so that the sign-in shows the usual error for it.
+#[tauri::command]
+pub async fn find_dsm_port(host: String) -> u16 {
+    let host = host.trim().to_owned();
+    first_answering(&DSM_PORTS, |port| {
+        let host = host.clone();
+        async move {
+            match Client::new(&host, port, None) {
+                Ok(client) => client.answers().await,
+                Err(_) => false,
+            }
+        }
+    })
+    .await
+}
+
+async fn first_answering<F, Fut>(ports: &[u16], answers: F) -> u16
+where
+    F: Fn(u16) -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    for &port in ports {
+        if answers(port).await {
+            return port;
+        }
+    }
+    ports[0]
+}
+
 #[tauri::command]
 pub fn known_devices(state: State<'_, AppState>) -> Vec<KnownDevice> {
     state
@@ -674,4 +709,26 @@ pub async fn cancel_setup(state: State<'_, AppState>) -> Result<(), Failure> {
     let previous = state.pending.lock().await.take();
     sign_out(previous).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn first(answering: &'static [u16]) -> u16 {
+        tauri::async_runtime::block_on(first_answering(&DSM_PORTS, |port| async move {
+            answering.contains(&port)
+        }))
+    }
+
+    #[test]
+    fn prefers_dsm_port_then_443() {
+        assert_eq!(first(&[5001, 443]), 5001);
+        assert_eq!(first(&[443]), 443);
+    }
+
+    #[test]
+    fn falls_back_to_dsm_port_when_nothing_answers() {
+        assert_eq!(first(&[]), 5001);
+    }
 }

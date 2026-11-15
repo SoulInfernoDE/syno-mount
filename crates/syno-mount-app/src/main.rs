@@ -105,6 +105,7 @@ fn main() -> ExitCode {
         })
         .invoke_handler(tauri::generate_handler![
             setup::discover,
+            setup::find_dsm_port,
             setup::known_devices,
             setup::forget_device,
             setup::connect,

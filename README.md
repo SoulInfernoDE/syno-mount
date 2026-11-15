@@ -20,7 +20,7 @@ It is made for people who found SMB and WebDAV wanting: programs and games that 
 
 ## What it does
 
-- **Finds the NAS** on the network (Bonjour and Synology Assistant's own search) or by address.
+- **Finds the NAS** on the network (Bonjour and Synology Assistant's own search) or by address; without a port it tries DSM on 5001, then on 443 (behind a reverse proxy).
 - **Signs in to DSM once** (with two-step verification) to check that **SFTP** and the **user home service** are on, and switches them on after asking. Accounts that may not use DSM go by SFTP alone.
 - **Trusts the NAS deliberately:** shows the SHA-256 fingerprint of its SSH host key and pins it in the app's own `known_hosts`. A changed key stops every mount.
 - **Creates an ed25519 key** for this computer and installs it on the NAS over SFTP, with the permissions sshd insists on. No password is stored, neither DSM's nor the SSH one.

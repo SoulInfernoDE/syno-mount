@@ -408,3 +408,45 @@ async fn identity_reads_server_name_and_model_and_tolerates_refusals() {
     );
     assert_eq!(model, Ok("VirtualDSM".to_owned()));
 }
+
+#[tokio::test]
+async fn dsm_answers_with_its_api_list() {
+    let (_server, client) = mock_nas().await;
+    assert!(client.answers().await);
+}
+
+#[tokio::test]
+async fn a_dsm_error_still_counts_as_an_answer() {
+    let server = MockServer::start().await;
+    Mock::given(path("/webapi/query.cgi"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "success": false, "error": { "code": 103 } })),
+        )
+        .mount(&server)
+        .await;
+    let client = Client::with_base(Url::parse(&format!("{}/", server.uri())).unwrap());
+    assert!(client.answers().await);
+}
+
+#[tokio::test]
+async fn an_error_page_is_not_dsm() {
+    // DSM's own web server answers this way for a host name it does not serve here.
+    let server = MockServer::start().await;
+    Mock::given(path("/webapi/query.cgi"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("<html>not found</html>"))
+        .mount(&server)
+        .await;
+    let client = Client::with_base(Url::parse(&format!("{}/", server.uri())).unwrap());
+    assert!(!client.answers().await);
+}
+
+#[tokio::test]
+async fn a_closed_port_is_not_dsm() {
+    let port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let client = Client::with_base(Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap());
+    assert!(!client.answers().await);
+}

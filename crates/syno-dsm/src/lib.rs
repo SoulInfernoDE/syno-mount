@@ -278,6 +278,17 @@ impl Client {
             .map_err(|error| Error::Unexpected(format!("API list: {error}")))
     }
 
+    /// Whether DSM answers at this address, without signing in. A certificate the
+    /// user has not trusted yet still counts: the sign-in asks about it next. Any
+    /// answer in DSM's format counts too; a closed port, a timeout or a web server
+    /// that is not DSM (an error page, for example) does not.
+    pub async fn answers(&self) -> bool {
+        !matches!(
+            self.api_info().await,
+            Err(Error::Network(_) | Error::Unexpected(_))
+        )
+    }
+
     /// Signs in. `Err(Error::Auth(AuthError::OtpRequired))` means: ask for the
     /// authenticator code and call again with `otp` set.
     pub async fn login(&self, credentials: &Credentials) -> Result<Session, Error> {

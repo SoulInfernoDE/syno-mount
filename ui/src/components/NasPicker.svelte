@@ -5,6 +5,7 @@
   import Trash from '@lucide/svelte/icons/trash-2';
   import {
     discover,
+    findDsmPort,
     forgetDevice,
     hasCore,
     knownDevices,
@@ -25,6 +26,7 @@
   let failure = $state<Failure | null>(null);
   let address = $state('');
   let addressInvalid = $state(false);
+  let checking = $state(false);
 
   const unsaved = $derived(
     found.filter(
@@ -44,11 +46,19 @@
     }
   }
 
-  function chooseAddress(event: SubmitEvent) {
+  async function chooseAddress(event: SubmitEvent) {
     event.preventDefault();
     const parsed = parseAddress(address);
     addressInvalid = parsed === null;
-    if (parsed) onchoose(parsed);
+    if (!parsed) return;
+    let port = parsed.port;
+    if (!parsed.portGiven) {
+      // Behind a reverse proxy DSM often answers on 443 only.
+      checking = true;
+      port = await findDsmPort(parsed.host).catch(() => parsed.port);
+      checking = false;
+    }
+    onchoose({ host: parsed.host, port });
   }
 
   async function forget(id: string) {
@@ -136,9 +146,12 @@
         spellcheck="false"
         aria-invalid={addressInvalid}
       />
-      <button class="button" disabled={!address.trim()}>{t('add-choose')}</button>
+      <button class="button" disabled={!address.trim() || checking}
+        >{checking ? t('add-manual-checking') : t('add-choose')}</button
+      >
     </div>
-    {#if addressInvalid}<span class="invalid">{t('add-manual-invalid')}</span>{/if}
+    {#if addressInvalid}<span class="invalid">{t('add-manual-invalid')}</span>
+    {:else}<span class="subtle">{t('add-manual-port-hint')}</span>{/if}
   </form>
 </section>
 

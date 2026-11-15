@@ -20,7 +20,7 @@ Gemacht für alle, denen SMB und WebDAV nicht reichen: Programme und Spiele, die
 
 ## Was es tut
 
-- **Findet das NAS** im Netzwerk (Bonjour und die Suche von Synology Assistant) oder über die Adresse.
+- **Findet das NAS** im Netzwerk (Bonjour und die Suche von Synology Assistant) oder über die Adresse; ohne Port sucht es DSM auf 5001, dann auf 443 (hinter einem Reverse-Proxy).
 - **Meldet sich einmal bei DSM an** (mit zweistufiger Bestätigung), prüft, ob **SFTP** und der **Benutzer-Home-Dienst** an sind, und schaltet sie nach Rückfrage ein. Konten, die DSM nicht nutzen dürfen, gehen nur über SFTP.
 - **Vertraut dem NAS bewusst:** zeigt den SHA-256-Fingerabdruck seines SSH-Host-Keys und hält ihn in den eigenen `known_hosts` der App fest. Ein geänderter Schlüssel stoppt jeden Mount.
 - **Erzeugt einen ed25519-Schlüssel** für diesen Computer und installiert ihn per SFTP auf dem NAS, mit den Rechten, die sshd verlangt. Es wird kein Passwort gespeichert, weder das von DSM noch das für SSH.

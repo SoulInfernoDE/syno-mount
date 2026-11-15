@@ -316,6 +316,7 @@ function applyAdmin(changes: AdminChanges) {
 
 const commands: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {
   discover: async () => (await wait(1000), found),
+  find_dsm_port: async () => (await wait(400), 5001),
   known_devices: async () => saved,
   forget_device: async (args) => {
     saved = saved.filter((device) => device.id !== args.id);

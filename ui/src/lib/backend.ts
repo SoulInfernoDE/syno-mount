@@ -219,6 +219,8 @@ export interface MountSettings {
 }
 
 export const discover = () => invoke<FoundNas[]>('discover');
+/** The port where DSM answers for an address typed without one: 5001, else 443. */
+export const findDsmPort = (host: string) => invoke<number>('find_dsm_port', { host });
 export const knownDevices = () => invoke<KnownDevice[]>('known_devices');
 export const forgetDevice = (id: string) => invoke<void>('forget_device', { id });
 export const connect = (request: ConnectRequest) => invoke<ConnectOutcome>('connect', { request });
@@ -257,11 +259,14 @@ export const checkAddress = (id: string, address: Address) =>
 export const checkSetupAddress = (address: Address) =>
   invoke<AddressCheck>('setup_check_address', { address });
 
-/** "nas.local:5001", "192.168.1.20" or "[fe80::1]:5001" → host and port. */
+/**
+ * "nas.local:5001", "192.168.1.20" or "[fe80::1]:5001" → host and port.
+ * `portGiven` is false when the port is `defaultPort` because none was typed.
+ */
 export function parseAddress(
   input: string,
   defaultPort = 5001,
-): { host: string; port: number } | null {
+): { host: string; port: number; portGiven: boolean } | null {
   let text = input
     .trim()
     .replace(/^(https?|ssh|sftp):\/\//i, '')
@@ -270,17 +275,22 @@ export function parseAddress(
     .replace(/^[^@[\]]*@/, '');
   if (!text) return null;
   let port = defaultPort;
+  let portGiven = false;
   const bracketed = /^\[([^\]]+)\](?::(\d+))?$/.exec(text);
   if (bracketed) {
     text = bracketed[1]!;
-    if (bracketed[2]) port = Number(bracketed[2]);
+    if (bracketed[2]) {
+      port = Number(bracketed[2]);
+      portGiven = true;
+    }
   } else if ((text.match(/:/g) ?? []).length === 1) {
     const [host, portText] = text.split(':');
     text = host!;
     port = Number(portText);
+    portGiven = true;
   }
   if (!text || !Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return { host: text, port };
+  return { host: text, port, portGiven };
 }
 
 // Administrator area.
