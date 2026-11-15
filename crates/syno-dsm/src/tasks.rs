@@ -137,9 +137,13 @@ impl Client {
                 &[("tasks", &task_list(id))],
             )
             .await;
-        let code = result?;
-        deleted?;
-        Ok(code)
+        // A root task left behind matters more than why the run failed.
+        if let Err(error) = deleted {
+            return Err(Error::Unexpected(format!(
+                "the task {name:?} could not be deleted; remove it in Control Panel › Task Scheduler ({error})"
+            )));
+        }
+        result
     }
 
     async fn run_task(&self, session: &Session, id: i64) -> Result<i64, Error> {

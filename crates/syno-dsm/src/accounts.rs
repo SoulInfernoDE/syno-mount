@@ -95,12 +95,17 @@ pub enum KeyLoginPrepared {
     Done,
     /// The account has no home folder yet: DSM creates it at the first sign-in.
     NoHome,
+    /// `.ssh` or `authorized_keys` is a link (or a hard-linked file): root does
+    /// not follow it anywhere, and nothing in `.ssh` was changed.
+    Unsafe,
     /// The script stopped with this exit code.
     Failed(i64),
 }
 
 /// Exit codes of [`key_login_script`].
 const NO_HOME: i64 = 10;
+/// `.ssh` or `authorized_keys` is a link or not a plain directory or file.
+const UNSAFE: i64 = 15;
 
 /// `word` for the shell: unchanged when it is plain, otherwise in single quotes.
 fn shell_word(word: &str) -> String {
@@ -121,6 +126,12 @@ fn shell_word(word: &str) -> String {
 /// the home, `.ssh` and `authorized_keys`, which get 755, 700 and 600. Keys already
 /// in the file stay. The last line checks the result. Shown to the administrator
 /// before it runs.
+///
+/// The account owns its home and could put links there that root would follow
+/// (`.ssh -> /etc`). So root first takes the home (owner root, 755, no ACL), and
+/// then `.ssh` (owner root, 700): from then on the account cannot add or swap
+/// anything. Links and hard-linked files are refused; `chown -h` never follows a
+/// link. The account gets both folders back at the end, also when a step fails.
 pub fn key_login_script(account: &str) -> Result<String, Error> {
     if account.is_empty() || account.starts_with(['.', '-']) || account.contains(['/', '\n', '\0'])
     {
@@ -128,18 +139,33 @@ pub fn key_login_script(account: &str) -> Result<String, Error> {
             "not an account name: {account:?}"
         )));
     }
+    // The name goes into one assignment, quoted; everything after uses the
+    // variable, so no later quoting (the trap) can break it apart.
     let name = shell_word(account);
     Ok(format!(
-        "cd /var/services/homes/{name} || exit {NO_HOME}\n\
-         mkdir -p .ssh || exit 11\n\
-         touch .ssh/authorized_keys || exit 11\n\
-         synoacltool -del .\n\
-         synoacltool -del .ssh\n\
-         synoacltool -del .ssh/authorized_keys\n\
-         chown {name} .ssh .ssh/authorized_keys || exit 12\n\
+        "account={name}\n\
+         cd /var/services/homes/\"$account\" || exit {NO_HOME}\n\
+         trap 'chown -h \"$account\" .; [ -d .ssh ] && [ ! -L .ssh ] && chown -h \"$account\" .ssh' EXIT\n\
+         synoacltool -del . >/dev/null 2>&1\n\
+         chown root . || exit 12\n\
          chmod 755 . || exit 13\n\
+         test \"$(stat -c %a .)\" = 755 || exit 13\n\
+         [ -L .ssh ] && exit {UNSAFE}\n\
+         [ -e .ssh ] && [ ! -d .ssh ] && exit {UNSAFE}\n\
+         mkdir -p .ssh || exit 11\n\
+         synoacltool -del .ssh >/dev/null 2>&1\n\
+         chown root .ssh || exit 12\n\
          chmod 700 .ssh || exit 13\n\
+         test \"$(stat -c %a .ssh)\" = 700 || exit 13\n\
+         [ -L .ssh/authorized_keys ] && exit {UNSAFE}\n\
+         [ -e .ssh/authorized_keys ] && [ ! -f .ssh/authorized_keys ] && exit {UNSAFE}\n\
+         [ -e .ssh/authorized_keys ] && [ \"$(stat -c %h .ssh/authorized_keys)\" != 1 ] && exit {UNSAFE}\n\
+         touch .ssh/authorized_keys || exit 11\n\
+         synoacltool -del .ssh/authorized_keys >/dev/null 2>&1\n\
+         chown -h \"$account\" .ssh/authorized_keys || exit 12\n\
          chmod 600 .ssh/authorized_keys || exit 13\n\
+         chown -h \"$account\" .ssh . || exit 12\n\
+         trap - EXIT\n\
          test \"$(stat -c %a . .ssh .ssh/authorized_keys | tr '\\n' ' ')\" = '755 700 600 ' || exit 14\n"
     ))
 }
@@ -148,6 +174,7 @@ pub(crate) fn prepared(exit_code: i64) -> KeyLoginPrepared {
     match exit_code {
         0 => KeyLoginPrepared::Done,
         NO_HOME => KeyLoginPrepared::NoHome,
+        UNSAFE => KeyLoginPrepared::Unsafe,
         other => KeyLoginPrepared::Failed(other),
     }
 }
@@ -566,9 +593,29 @@ mod tests {
     fn writes_the_key_login_commands() {
         let script = key_login_script("anna").unwrap();
         let lines: Vec<&str> = script.lines().collect();
-        assert_eq!(lines[0], "cd /var/services/homes/anna || exit 10");
-        assert!(lines.contains(&"synoacltool -del .ssh/authorized_keys"));
-        assert!(lines.contains(&"chown anna .ssh .ssh/authorized_keys || exit 12"));
+        assert_eq!(lines[0], "account=anna");
+        assert_eq!(lines[1], r#"cd /var/services/homes/"$account" || exit 10"#);
+        // The restore trap is set before root takes anything.
+        assert!(lines[2].starts_with(r#"trap 'chown -h "$account" .;"#));
+        // Root takes the home and .ssh before it looks at what is inside.
+        let take_home = lines.iter().position(|l| *l == "chown root . || exit 12");
+        let first_check = lines.iter().position(|l| *l == "[ -L .ssh ] && exit 15");
+        assert!(take_home.unwrap() < first_check.unwrap());
+        let take_ssh = lines
+            .iter()
+            .position(|l| *l == "chown root .ssh || exit 12");
+        let key_check = lines
+            .iter()
+            .position(|l| *l == "[ -L .ssh/authorized_keys ] && exit 15");
+        assert!(take_ssh.unwrap() < key_check.unwrap());
+        // No chown that could follow a link.
+        assert!(
+            lines
+                .iter()
+                .filter(|l| l.starts_with("chown ") && !l.starts_with("chown root"))
+                .all(|l| l.starts_with("chown -h "))
+        );
+        assert!(lines.contains(&r#"chown -h "$account" .ssh . || exit 12"#));
         assert!(lines.contains(&"chmod 600 .ssh/authorized_keys || exit 13"));
         assert_eq!(
             lines.last().unwrap(),
@@ -576,7 +623,8 @@ mod tests {
         );
         // Names that the shell would read differently are quoted.
         let odd = key_login_script("o'neil smith").unwrap();
-        assert!(odd.starts_with(r"cd /var/services/homes/'o'\''neil smith' || exit 10"));
+        assert!(odd.starts_with("account='o'\\''neil smith'\n"));
+        assert_eq!(odd.matches("o'").count(), 1, "the name appears once");
         assert_eq!(shell_word("anna.b-c_d@x"), "anna.b-c_d@x");
         // Paths outside the homes are refused.
         for bad in ["", "..", "-rf", "a/b", "a\nb"] {
@@ -584,6 +632,7 @@ mod tests {
         }
         assert_eq!(prepared(0), KeyLoginPrepared::Done);
         assert_eq!(prepared(10), KeyLoginPrepared::NoHome);
+        assert_eq!(prepared(15), KeyLoginPrepared::Unsafe);
         assert_eq!(prepared(14), KeyLoginPrepared::Failed(14));
         assert_eq!(
             serde_json::to_value(KeyLoginPrepared::Failed(14)).unwrap(),

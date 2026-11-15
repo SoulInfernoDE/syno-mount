@@ -398,6 +398,7 @@ error-key-refused-acl-home = Das Passwort stimmt und der Schlüssel ist installi
 error-key-refused = Das Passwort stimmt und der Schlüssel ist installiert, aber das NAS lehnt die Anmeldung damit ab. Ein Administrator kann die SSH-Einstellungen des NAS prüfen.
 error-key-login-no-home = Dieses Konto hat noch keinen Home-Ordner. Schalte den Benutzer-Home-Dienst ein, melde dich einmal mit dem Konto an und versuche es dann noch einmal.
 error-key-login-failed = Die Befehle auf dem NAS sind mit einem Fehler abgebrochen; die Schritte danach liefen nicht mehr.
+error-key-login-unsafe = Im Home-Ordner ist .ssh oder authorized_keys ein Link oder eine von woanders verlinkte Datei. Root folgt ihm nicht, in .ssh wurde nichts geändert. Entferne ihn mit dem Konto (er kann irgendwohin auf dem NAS zeigen) und versuche es erneut.
 error-sftp = Das NAS hat einen Dateizugriff abgelehnt.
 error-proxy-tls = Die TLS-Verbindung zum Proxy ist fehlgeschlagen.
 error-proxy-certificate-untrusted = Dem Zertifikat des Proxys wird nicht vertraut.

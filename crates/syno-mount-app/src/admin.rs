@@ -217,6 +217,7 @@ pub async fn admin_prepare_key_login(
     match outcome {
         KeyLoginPrepared::Done => Ok(()),
         KeyLoginPrepared::NoHome => Err(Failure::new("key-login-no-home", None)),
+        KeyLoginPrepared::Unsafe => Err(Failure::new("key-login-unsafe", None)),
         KeyLoginPrepared::Failed(code) => Err(Failure::new(
             "key-login-failed",
             format!("exit code {code}"),

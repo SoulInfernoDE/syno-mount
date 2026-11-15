@@ -263,6 +263,13 @@
       keyLoginDone = name;
     } catch (error) {
       keyFailure = toFailure(error);
+      // Closed meanwhile: show it on the page, so it is not lost.
+      if (!keyLoginOpen) failure = keyFailure;
+      if (keyFailure.key === 'session-expired' || keyFailure.key === 'not-connected') {
+        keyLoginOpen = false;
+        failure = keyFailure;
+        step = 'signin';
+      }
     } finally {
       keyBusy = false;
       keyPassword = '';
