@@ -66,6 +66,25 @@ cargo run -p syno-ssh --example tunnel-probe -- 127.0.0.1 28443 proxy.test.local
 
 Für einen Mount schreibt `… --example systemd prepare` den Ordner; danach bekommt seine Internet-Adresse in `mounts.json` ein `tunnel` und der LAN-Port einen geschlossenen, damit `syno-mount run-mount <id>` den Tunnel nimmt. Ergebnisse: [https-tunnel.de.md](https-tunnel.de.md#phase-1-getestet).
 
+## Gegen ein echtes NAS (DSM 7.4.1)
+
+Eine Synology-NAS mit DSM 7.4.1, verschlüsselten Freigaben auf SSD und einem eigens angelegten Konto (kein Administrator, zweistufige Bestätigung erzwungen). Linux-Client: der Build dieses Branches in einem LXC-Container; Windows-Client: der Installer aus dem Release-Workflow auf einer Windows-11-VM. Das Passwort kam aus auth-switch (`auth-switch exec --synology --password`) und wurde nur zum Installieren des Schlüssels genutzt.
+
+| Test                                                       | Ergebnis                                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Passwort per SFTP bei erzwungener zweistufiger Bestätigung | angenommen; der Schlüssel wird installiert                                                |
+| Schlüssel-Anmeldung, Home-Ordner mit Windows-ACL           | abgelehnt (`777` auf `.ssh` und `authorized_keys`); geht nach den Befehlen aus der README |
+| Linux, LAN                                                 | eingebunden nach 0,27 s, Latenz 2,4 ms; Selbsttest wie bei einer ACL-Freigabe             |
+| Linux, 128–256 MiB schreiben und lesen                     | 98 MiB/s schreiben, 105 MiB/s lesen; direktes SFTP 92/97 MiB/s                            |
+| Linux, Internet-Name über IPv6                             | eingebunden nach 0,3 s, Weg „Internet“, DNS „unverschlüsselt“ angezeigt                   |
+| Linux, Internet-Adresse über IPv4 ohne Portfreigabe        | nicht eingebunden; Journal: `…:5009: No route to host`                                    |
+| Linux, „Über HTTPS“ zu einem Webserver ohne stream-Block   | nicht eingebunden; der Proxy lehnt das ALPN-Protokoll ab                                  |
+| Windows, LAN                                               | `Z:` nach 2,6 s; Selbsttest; 32 MiB identisch                                             |
+| Windows, Internet-Name über IPv6                           | `Z:` nach 1,8 s, Weg „Internet“                                                           |
+| Windows, Stoppen                                           | `Z:` nach 1,5 s weg                                                                       |
+
+Unterwegs gefunden: Ein Selbsttest unter Windows konnte seinen leeren Testordner zurücklassen, solange rclone noch hochlud; das Aufräumen versucht es jetzt kurz erneut.
+
 ## Windows
 
 Getestet auf einer Windows-11-VM (Build 26200) mit WinFsp und rclone v1.75.2 aus winget und dem Installer aus dem Release-Workflow (`-setup.exe /S`). Die VM erreicht das Virtual DSM über einen SSH-Rücktunnel (`ssh -R 25022:127.0.0.1:25022 <vm>`), am Netzwerk ändert sich also nichts. Ordnerliste, Schlüssel und `known_hosts` wurden so geschrieben, wie die App sie schreibt; `syno-mount.exe status` und `syno-mount.exe selftest <id>` lesen das Ergebnis ohne Fenster.
